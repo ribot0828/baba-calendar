@@ -42,6 +42,11 @@
   .cal-nav button{background:var(--panel); border:1px solid var(--line); border-radius:10px;
     padding:8px 14px; font-weight:600;}
   .cal-nav .ym{font-size:16px; font-weight:700;}
+  .ym-picker{display:flex; align-items:center; gap:6px;}
+  .cal-nav .ym-picker select{width:auto; background:var(--panel); color:var(--txt);
+    border:1px solid var(--line); border-radius:10px; padding:8px 10px; font-size:16px;
+    font-weight:700; text-align:center; text-align-last:center;
+    -webkit-appearance:menulist; appearance:menulist;}
   .cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:4px;}
   .cal-dow{text-align:center; font-size:11px; color:var(--muted); padding:2px 0;}
   .cal-dow.sun{color:#ff8a8a;} .cal-dow.sat{color:#8ab4ff;}
@@ -141,9 +146,12 @@
 <!-- カレンダー -->
 <section id="view-calendar" class="view">
   <div class="cal-nav">
-    <button id="prevMonth">‹ 前月</button>
-    <div class="ym" id="ymLabel"></div>
-    <button id="nextMonth">翌月 ›</button>
+    <button id="prevMonth" aria-label="前月">‹</button>
+    <div class="ym-picker">
+      <select id="selYear" aria-label="年を選択"></select>
+      <select id="selMonth" aria-label="月を選択"></select>
+    </div>
+    <button id="nextMonth" aria-label="翌月">›</button>
   </div>
   <div class="cal-grid" id="calDow"></div>
   <div class="cal-grid" id="calGrid" style="margin-top:4px;"></div>
@@ -421,8 +429,25 @@
     const g=document.getElementById("calDow"); g.innerHTML="";
     DOW.forEach((d,i)=> g.appendChild(el("div",{class:"cal-dow "+(i===0?"sun":i===6?"sat":""),text:d})));
   }
+  function yearRange(){
+    const nowY=new Date().getFullYear();
+    const ys=state.entries.map(e=>parseISO(e.date)).filter(Boolean).map(d=>d.getFullYear());
+    let min=Math.min(nowY-12, calYear, ...(ys.length?ys:[nowY]));
+    let max=Math.max(nowY+1, calYear, ...(ys.length?ys:[nowY]));
+    const out=[]; for(let y=min;y<=max;y++) out.push(y); return out;
+  }
+  function syncYearMonth(){
+    const sy=document.getElementById("selYear");
+    const years=yearRange();
+    const cur=[...sy.options].map(o=>+o.value);
+    if(cur.length!==years.length || cur[0]!==years[0] || cur[cur.length-1]!==years[years.length-1]){
+      sy.innerHTML=""; years.forEach(y=> sy.appendChild(el("option",{value:String(y),text:y+"年"})));
+    }
+    sy.value=String(calYear);
+    document.getElementById("selMonth").value=String(calMonth);
+  }
   function renderCalendar(){
-    document.getElementById("ymLabel").textContent=`${calYear}年 ${calMonth+1}月`;
+    syncYearMonth();
     const g=document.getElementById("calGrid"); g.innerHTML="";
     const first=new Date(calYear, calMonth, 1);
     const startDow=first.getDay();
@@ -744,10 +769,14 @@
   function init(){
     load();
     const now=new Date(); calYear=now.getFullYear(); calMonth=now.getMonth();
+    const selMonth=document.getElementById("selMonth");
+    for(let m=0;m<12;m++) selMonth.appendChild(el("option",{value:String(m),text:(m+1)+"月"}));
     renderDow(); renderCalendar(); updateStat();
 
     document.getElementById("prevMonth").onclick=()=>{ calMonth--; if(calMonth<0){calMonth=11;calYear--;} renderCalendar(); };
     document.getElementById("nextMonth").onclick=()=>{ calMonth++; if(calMonth>11){calMonth=0;calYear++;} renderCalendar(); };
+    document.getElementById("selYear").onchange=(e)=>{ calYear=+e.target.value; renderCalendar(); };
+    selMonth.onchange=(e)=>{ calMonth=+e.target.value; renderCalendar(); };
     document.querySelectorAll(".tabbar button").forEach(b=> b.onclick=()=>switchTab(b.dataset.tab));
     document.getElementById("fab").onclick=()=> openEditor({});
 
