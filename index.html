@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<!-- セキュリティ: 外部通信を全面禁止(connect-src 'none')。データは端末内に留まり外部送信されない。
+     外部リソース読み込みも禁止し、サプライチェーン汚染・トラッキングを防ぐ。 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'; connect-src 'none'; frame-ancestors 'none';">
+<meta name="referrer" content="no-referrer">
+<!-- スマホ「ホーム画面に追加」対応(アプリ風表示・iOSの保存データ消去対策の一助) -->
+<meta name="theme-color" content="#0f1115">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="馬場カレンダー">
+<title>馬場カレンダー</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a;
+    --txt:#e8eaed; --muted:#9aa3b2; --accent:#4ea1ff; --accent2:#7ee787;
+    --turf:#2f9e5a; --dirt:#b6803a; --jump:#8a6bd6;
+    --danger:#ff6b6b; --warn:#ffcc66; --chip:#242a35;
+    --safe-b: env(safe-area-inset-bottom, 0px);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; background:var(--bg); color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Noto Sans JP",Meiryo,sans-serif;
+    font-size:15px; line-height:1.5;}
+  body{max-width:720px; margin:0 auto; padding-bottom:calc(64px + var(--safe-b));}
+  h1,h2,h3{margin:0 0 8px;}
+  button{font:inherit; color:inherit; cursor:pointer; border:none; background:none;}
+  .app-header{position:sticky; top:0; z-index:20; background:var(--bg);
+    padding:12px 14px 8px; border-bottom:1px solid var(--line);
+    display:flex; align-items:center; gap:10px;}
+  .app-header .title{font-size:17px; font-weight:700;}
+  .app-header .sub{font-size:12px; color:var(--muted);}
+  .view{padding:12px 14px;}
+  .hidden{display:none !important;}
+
+  /* Calendar */
+  .cal-nav{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;}
+  .cal-nav button{background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:8px 14px; font-weight:600;}
+  .cal-nav .ym{font-size:16px; font-weight:700;}
+  .cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:4px;}
+  .cal-dow{text-align:center; font-size:11px; color:var(--muted); padding:2px 0;}
+  .cal-dow.sun{color:#ff8a8a;} .cal-dow.sat{color:#8ab4ff;}
+  .cal-cell{aspect-ratio:1/1.15; background:var(--panel); border:1px solid var(--line);
+    border-radius:10px; padding:4px; position:relative; display:flex; flex-direction:column;
+    overflow:hidden;}
+  .cal-cell.empty{background:transparent; border-color:transparent;}
+  .cal-cell.today{outline:2px solid var(--accent);}
+  .cal-cell .d{font-size:13px; font-weight:600;}
+  .cal-cell.sun .d{color:#ff8a8a;} .cal-cell.sat .d{color:#8ab4ff;}
+  .cal-cell .venues{margin-top:auto; display:flex; flex-wrap:wrap; gap:2px;}
+  .vtag{font-size:9px; padding:1px 3px; border-radius:4px; background:var(--chip);
+    color:var(--txt); white-space:nowrap; line-height:1.3;}
+  .cal-cell .dots{position:absolute; top:5px; right:5px; display:flex; gap:2px;}
+  .dot{width:6px; height:6px; border-radius:50%;}
+  .dot.turf{background:var(--turf);} .dot.dirt{background:var(--dirt);} .dot.jump{background:var(--jump);}
+
+  /* Cards / lists */
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:12px; margin-bottom:10px;}
+  .row{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  .between{justify-content:space-between;}
+  .muted{color:var(--muted);} .small{font-size:12px;} .tiny{font-size:11px;}
+  .venue-btn{width:100%; text-align:left; background:var(--panel2); border:1px solid var(--line);
+    border-radius:10px; padding:10px 12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;}
+  .surf-chip{font-size:11px; padding:2px 7px; border-radius:20px; font-weight:700; color:#0c0e12;}
+  .surf-chip.turf{background:var(--turf); color:#eafff0;}
+  .surf-chip.dirt{background:var(--dirt); color:#fff6e8;}
+  .surf-chip.jump{background:var(--jump); color:#f2ecff;}
+  .cond{font-size:11px; padding:2px 7px; border-radius:6px; background:var(--chip); color:var(--muted);}
+  .cond.良{color:#8ef0a8;} .cond.稍重{color:#ffe08a;} .cond.重{color:#ffb86b;} .cond.不良{color:#ff8a8a;}
+  .tagchip{font-size:11px; padding:2px 8px; border-radius:20px; background:var(--chip); color:var(--accent);}
+  .memo-body{white-space:pre-wrap; word-break:break-word; margin-top:6px;}
+  .kaisai{font-size:11px; color:var(--muted);}
+
+  /* Forms */
+  label.fld{display:block; font-size:12px; color:var(--muted); margin:10px 0 4px;}
+  select,input[type=text],input[type=date],textarea{width:100%; background:var(--panel2);
+    color:var(--txt); border:1px solid var(--line); border-radius:10px; padding:10px; font:inherit;}
+  textarea{min-height:110px; resize:vertical;}
+  .seg{display:flex; gap:6px; flex-wrap:wrap;}
+  .seg button{flex:1 1 auto; min-width:60px; background:var(--panel2); border:1px solid var(--line);
+    border-radius:10px; padding:9px; font-weight:600;}
+  .seg button.on{background:var(--accent); color:#04101f; border-color:var(--accent);}
+  .seg button.turf.on{background:var(--turf); color:#eafff0; border-color:var(--turf);}
+  .seg button.dirt.on{background:var(--dirt); color:#fff6e8; border-color:var(--dirt);}
+  .seg button.jump.on{background:var(--jump); color:#f2ecff; border-color:var(--jump);}
+  .btn{display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    background:var(--accent); color:#04101f; font-weight:700; border-radius:10px; padding:11px 14px;}
+  .btn.ghost{background:var(--panel2); color:var(--txt); border:1px solid var(--line);}
+  .btn.danger{background:transparent; color:var(--danger); border:1px solid var(--danger);}
+  .btn.full{width:100%;}
+  .btn-row{display:flex; gap:8px; margin-top:14px;}
+
+  /* Tabs */
+  .tabbar{position:fixed; bottom:0; left:0; right:0; z-index:30;
+    background:var(--panel); border-top:1px solid var(--line);
+    display:flex; padding-bottom:var(--safe-b); max-width:720px; margin:0 auto;}
+  .tabbar button{flex:1; padding:9px 0 8px; display:flex; flex-direction:column; align-items:center;
+    gap:2px; color:var(--muted); font-size:11px;}
+  .tabbar button.on{color:var(--accent);}
+  .tabbar .ic{font-size:20px; line-height:1;}
+  .fab{position:fixed; right:16px; bottom:calc(74px + var(--safe-b)); z-index:25;
+    width:56px; height:56px; border-radius:50%; background:var(--accent); color:#04101f;
+    font-size:30px; font-weight:400; box-shadow:0 6px 18px rgba(0,0,0,.4);
+    display:flex; align-items:center; justify-content:center; max-width:720px;}
+
+  /* Modal / sheet */
+  .sheet-backdrop{position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:40; display:flex;
+    align-items:flex-end; justify-content:center;}
+  .sheet{background:var(--panel); width:100%; max-width:720px; max-height:92vh; overflow:auto;
+    border-radius:16px 16px 0 0; padding:16px 16px calc(20px + var(--safe-b)); border-top:1px solid var(--line);}
+  .sheet h2{display:flex; justify-content:space-between; align-items:center;}
+  .x{font-size:22px; color:var(--muted); padding:2px 8px;}
+
+  .empty-state{text-align:center; color:var(--muted); padding:40px 20px;}
+  .divider{height:1px; background:var(--line); margin:12px 0;}
+  .cmp{background:var(--panel2); border-radius:10px; padding:10px; margin-top:8px; border:1px dashed var(--line);}
+  .cmp .lbl{font-size:11px; color:var(--warn); font-weight:700; margin-bottom:6px;}
+  .toast{position:fixed; left:50%; transform:translateX(-50%); bottom:calc(90px + var(--safe-b));
+    background:#000; color:#fff; padding:9px 16px; border-radius:20px; font-size:13px; z-index:60; opacity:0;
+    transition:opacity .2s; pointer-events:none; border:1px solid var(--line);}
+  .toast.show{opacity:1;}
+  .filterow{display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;}
+  .filterow select{width:auto; flex:1; min-width:120px;}
+  code.k{background:var(--panel2); padding:1px 5px; border-radius:5px; font-size:12px;}
+</style>
+</head>
+<body>
+<div class="app-header">
+  <div style="flex:1">
+    <div class="title">🐎 馬場カレンダー</div>
+    <div class="sub" id="hdrSub">各開催場の馬場・血統傾向を振り返る</div>
+  </div>
+</div>
+
+<!-- カレンダー -->
+<section id="view-calendar" class="view">
+  <div class="cal-nav">
+    <button id="prevMonth">‹ 前月</button>
+    <div class="ym" id="ymLabel"></div>
+    <button id="nextMonth">翌月 ›</button>
+  </div>
+  <div class="cal-grid" id="calDow"></div>
+  <div class="cal-grid" id="calGrid" style="margin-top:4px;"></div>
+  <div style="margin-top:14px" class="row tiny muted">
+    <span><span class="dot turf" style="display:inline-block"></span> 芝</span>
+    <span><span class="dot dirt" style="display:inline-block"></span> ダート</span>
+    <span><span class="dot jump" style="display:inline-block"></span> 障害</span>
+    <span class="muted">・日付をタップで概要</span>
+  </div>
+</section>
+
+<!-- 履歴(開催場別) -->
+<section id="view-history" class="view hidden">
+  <h2>馬場メモ履歴</h2>
+  <div class="filterow filterow-wrap">
+    <select id="fltVenue"><option value="">全開催場</option></select>
+    <select id="fltSurface">
+      <option value="">全馬場</option><option>芝</option><option>ダート</option><option>障害</option>
+    </select>
+    <select id="fltSort">
+      <option value="venue">開催場順</option>
+      <option value="date-desc">日付(新しい順)</option>
+      <option value="date-asc">日付(古い順)</option>
+    </select>
+  </div>
+  <div id="historyList"></div>
+</section>
+
+<!-- データ入出力 -->
+<section id="view-data" class="view hidden">
+  <h2>データ入出力</h2>
+  <div class="card">
+    <h3>エクスポート(保存)</h3>
+    <p class="small muted">全メモをファイルに書き出します。CSVはExcel等で編集可能、JSONは完全バックアップ用。</p>
+    <div class="btn-row">
+      <button class="btn full" id="expCsv">CSVで保存</button>
+      <button class="btn ghost full" id="expJson">JSONで保存</button>
+    </div>
+  </div>
+  <div class="card">
+    <h3>インポート(一括追加)</h3>
+    <p class="small muted">CSV / JSON を読み込み。<code class="k">id</code>が一致する行は上書き更新、無ければ新規追加（可逆）。</p>
+    <input type="file" id="impFile" accept=".csv,.json,text/csv,application/json" style="margin-top:8px">
+    <div class="row small muted" style="margin-top:10px">
+      <button class="btn ghost" id="dlTemplate">CSVテンプレDL</button>
+    </div>
+  </div>
+  <div class="card">
+    <h3 class="between row" style="justify-content:space-between">現在のデータ <span class="muted small" id="statCount"></span></h3>
+    <p class="small muted">保存先: この端末のブラウザ内(localStorage)。外部送信は行いません。</p>
+    <button class="btn danger full" id="wipe" style="margin-top:8px">全データ削除</button>
+  </div>
+  <div class="card">
+    <h3>セキュリティ / 配布メモ</h3>
+    <ul class="small muted" style="margin:6px 0 0; padding-left:18px; line-height:1.7">
+      <li>単一HTML・サーバ不要。データは端末内のみ、外部送信なし(CSPで通信遮断)。</li>
+      <li>メモ表示はテキストとして描画(XSS対策)。CSV出力は数式インジェクション対策済み。</li>
+      <li>配布は静的ファイルとして共有可能(GitHub Pages等)。個人情報は保存しない設計を推奨。</li>
+    </ul>
+  </div>
+</section>
+
+<button class="fab hidden" id="fab">＋</button>
+
+<nav class="tabbar">
+  <button data-tab="calendar" class="on"><span class="ic">📅</span>カレンダー</button>
+  <button data-tab="history"><span class="ic">📖</span>履歴</button>
+  <button data-tab="data"><span class="ic">💾</span>データ</button>
+</nav>
+
+<div id="sheetRoot"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+(function(){
+  // ---------- 定数 ----------
+  const STORAGE_KEY = "babaCalendar.v1";
+  const VENUES = ["札幌","函館","福島","新潟","東京","中山","中京","京都","阪神","小倉"];
+  const SURFACES = ["芝","ダート","障害"];
+  const CONDITIONS = ["良","稍重","重","不良"];
+  const SURF_CLASS = {"芝":"turf","ダート":"dirt","障害":"jump"};
+  const DOW = ["日","月","火","水","木","金","土"];
+
+  // ---------- 状態 ----------
+  let state = { entries: [] };
+  let calYear, calMonth; // 表示中の年月
+  let currentTab = "calendar";
+
+  // ---------- ユーティリティ ----------
+  function uid(){
+    if (crypto && crypto.randomUUID) return crypto.randomUUID();
+    return "e-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2,9);
+  }
+  function pad(n){ return String(n).padStart(2,"0"); }
+  function todayISO(){ const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+  function parseISO(s){ const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s||""); if(!m) return null;
+    const d=new Date(+m[1], +m[2]-1, +m[3]); return isNaN(d)?null:d; }
+  function fmtDateJP(iso){ const d=parseISO(iso); if(!d) return iso;
+    return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日(${DOW[d.getDay()]})`; }
+  function shiftYearISO(iso, delta){ const d=parseISO(iso); if(!d) return null;
+    d.setFullYear(d.getFullYear()+delta); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+  function daysBetween(a,b){ const da=parseISO(a),db=parseISO(b); if(!da||!db) return Infinity;
+    return Math.round((da-db)/86400000); }
+
+  // DOM生成ヘルパ(textContentで安全にテキスト挿入 = XSS対策)
+  function el(tag, props, children){
+    const n=document.createElement(tag);
+    if(props){ for(const k in props){
+      if(k==="class") n.className=props[k];
+      else if(k==="text") n.textContent=props[k];
+      else if(k==="html") { /* 未使用: 生HTMLは使わない */ }
+      else if(k.startsWith("on") && typeof props[k]==="function") n.addEventListener(k.slice(2), props[k]);
+      else if(props[k]!=null) n.setAttribute(k, props[k]);
+    }}
+    if(children!=null){
+      (Array.isArray(children)?children:[children]).forEach(c=>{
+        if(c==null) return;
+        n.appendChild(typeof c==="string"?document.createTextNode(c):c);
+      });
+    }
+    return n;
+  }
+  let toastTimer=null;
+  function toast(msg){
+    const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show");
+    clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove("show"), 2200);
+  }
+
+  // ---------- 永続化 ----------
+  function load(){
+    try{
+      const raw=localStorage.getItem(STORAGE_KEY);
+      if(raw){ const j=JSON.parse(raw); if(j && Array.isArray(j.entries)) state=j; }
+    }catch(e){ console.warn("load失敗",e); }
+  }
+  function save(){
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+    catch(e){ toast("保存に失敗しました"); console.error(e); }
+  }
+
+  function normalizeEntry(e){
+    return {
+      id: e.id || uid(),
+      date: e.date || "",
+      venue: e.venue || "",
+      round: e.round!=null ? String(e.round) : "",
+      day: e.day!=null ? String(e.day) : "",
+      surface: SURFACES.includes(e.surface) ? e.surface : (e.surface||""),
+      condition: CONDITIONS.includes(e.condition) ? e.condition : (e.condition||""),
+      tags: Array.isArray(e.tags) ? e.tags.filter(Boolean)
+            : (typeof e.tags==="string" && e.tags ? e.tags.split(/[;；]/).map(s=>s.trim()).filter(Boolean) : []),
+      memo: e.memo || "",
+      createdAt: e.createdAt || new Date().toISOString(),
+      updatedAt: e.updatedAt || new Date().toISOString()
+    };
+  }
+
+  function upsert(entry){
+    entry=normalizeEntry(entry);
+    const i=state.entries.findIndex(x=>x.id===entry.id);
+    if(i>=0){ entry.createdAt=state.entries[i].createdAt; entry.updatedAt=new Date().toISOString(); state.entries[i]=entry; }
+    else state.entries.push(entry);
+    save();
+    return entry;
+  }
+  function removeEntry(id){ state.entries=state.entries.filter(e=>e.id!==id); save(); }
+
+  function entriesOn(iso){ return state.entries.filter(e=>e.date===iso); }
+  function venuesOn(iso){
+    const set=[]; entriesOn(iso).forEach(e=>{ if(e.venue && !set.includes(e.venue)) set.push(e.venue); });
+    // JRA順に並べる
+    return set.sort((a,b)=>VENUES.indexOf(a)-VENUES.indexOf(b));
+  }
+
+  // 前年同開催の比較検索
+  function prevYearMatches(entry){
+    const py = shiftYearISO(entry.date, -1);
+    if(!py) return [];
+    let cands = state.entries.filter(e=>e.venue===entry.venue && e.id!==entry.id);
+    // 回・日目があれば厳密一致優先
+    if(entry.round && entry.day){
+      const strict = cands.filter(e=>{
+        const d=parseISO(e.date); const dt=parseISO(entry.date);
+        return e.round===entry.round && e.day===entry.day && d && dt && d.getFullYear()===dt.getFullYear()-1;
+      });
+      if(strict.length) return strict;
+    }
+    // フォールバック: 前年同日 ±10日、同馬場優先
+    cands = cands.filter(e=>Math.abs(daysBetween(e.date, py))<=10);
+    cands.sort((a,b)=>{
+      const sa=(a.surface===entry.surface)?0:1, sb=(b.surface===entry.surface)?0:1;
+      if(sa!==sb) return sa-sb;
+      return Math.abs(daysBetween(a.date,py))-Math.abs(daysBetween(b.date,py));
+    });
+    return cands;
+  }
+
+  // ---------- CSV ----------
+  const CSV_COLS = ["id","date","venue","round","day","surface","condition","tags","memo","createdAt","updatedAt"];
+  // CSVインジェクション対策: 数式起動文字で始まるセルに ' を付与
+  function csvSafe(v){
+    let s = v==null ? "" : String(v);
+    if(/^[=+\-@\t\r]/.test(s)) s="'"+s;
+    if(/[",\r\n]/.test(s)) s='"'+s.replace(/"/g,'""')+'"';
+    return s;
+  }
+  function stripCsvGuard(v){ // インポート時: 付与した ' を戻す
+    if(typeof v==="string" && /^'[=+\-@\t\r]/.test(v)) return v.slice(1);
+    return v;
+  }
+  function toCSV(entries){
+    const lines=[CSV_COLS.join(",")];
+    entries.forEach(e=>{
+      const row=CSV_COLS.map(c=>{
+        if(c==="tags") return csvSafe((e.tags||[]).join(";"));
+        return csvSafe(e[c]);
+      });
+      lines.push(row.join(","));
+    });
+    return "﻿"+lines.join("\r\n"); // BOM付きでExcel文字化け防止
+  }
+  // RFC4180準拠パーサ
+  function parseCSV(text){
+    text=text.replace(/^﻿/,"");
+    const rows=[]; let row=[], field="", i=0, inQ=false;
+    while(i<text.length){
+      const c=text[i];
+      if(inQ){
+        if(c==='"'){ if(text[i+1]==='"'){ field+='"'; i+=2; continue; } inQ=false; i++; continue; }
+        field+=c; i++; continue;
+      }
+      if(c==='"'){ inQ=true; i++; continue; }
+      if(c===","){ row.push(field); field=""; i++; continue; }
+      if(c==="\r"){ i++; continue; }
+      if(c==="\n"){ row.push(field); rows.push(row); row=[]; field=""; i++; continue; }
+      field+=c; i++;
+    }
+    if(field!=="" || row.length){ row.push(field); rows.push(row); }
+    return rows.filter(r=>r.length && !(r.length===1 && r[0]===""));
+  }
+  function csvToEntries(text){
+    const rows=parseCSV(text);
+    if(!rows.length) return [];
+    const header=rows[0].map(h=>h.trim());
+    const idx={}; CSV_COLS.forEach(c=>{ idx[c]=header.indexOf(c); });
+    if(idx.date<0 || idx.venue<0){ // ヘッダ無し想定は避け、必須列チェック
+      throw new Error("CSVヘッダに date, venue 列が必要です");
+    }
+    const out=[];
+    for(let r=1;r<rows.length;r++){
+      const row=rows[r]; const g=(c)=> idx[c]>=0 ? stripCsvGuard(row[idx[c]]||"") : "";
+      const obj={
+        id:g("id"), date:g("date").trim(), venue:g("venue").trim(),
+        round:g("round").trim(), day:g("day").trim(),
+        surface:g("surface").trim(), condition:g("condition").trim(),
+        tags:g("tags"), memo:g("memo"),
+        createdAt:g("createdAt")||undefined, updatedAt:g("updatedAt")||undefined
+      };
+      if(!obj.date && !obj.venue && !obj.memo) continue;
+      out.push(obj);
+    }
+    return out;
+  }
+
+  function downloadFile(name, content, mime){
+    const blob=new Blob([content], {type:mime});
+    const url=URL.createObjectURL(blob);
+    const a=el("a",{href:url, download:name}); document.body.appendChild(a); a.click();
+    a.remove(); setTimeout(()=>URL.revokeObjectURL(url), 1000);
+  }
+
+  // ---------- レンダリング: カレンダー ----------
+  function renderDow(){
+    const g=document.getElementById("calDow"); g.innerHTML="";
+    DOW.forEach((d,i)=> g.appendChild(el("div",{class:"cal-dow "+(i===0?"sun":i===6?"sat":""),text:d})));
+  }
+  function renderCalendar(){
+    document.getElementById("ymLabel").textContent=`${calYear}年 ${calMonth+1}月`;
+    const g=document.getElementById("calGrid"); g.innerHTML="";
+    const first=new Date(calYear, calMonth, 1);
+    const startDow=first.getDay();
+    const daysInMonth=new Date(calYear, calMonth+1, 0).getDate();
+    const tISO=todayISO();
+    for(let k=0;k<startDow;k++) g.appendChild(el("div",{class:"cal-cell empty"}));
+    for(let d=1; d<=daysInMonth; d++){
+      const iso=`${calYear}-${pad(calMonth+1)}-${pad(d)}`;
+      const dow=new Date(calYear, calMonth, d).getDay();
+      const cls="cal-cell "+(dow===0?"sun ":dow===6?"sat ":"")+(iso===tISO?"today":"");
+      const cell=el("div",{class:cls.trim(), onclick:()=>openDaySheet(iso)});
+      cell.appendChild(el("div",{class:"d",text:String(d)}));
+      // 馬場ドット
+      const surfs=new Set(entriesOn(iso).map(e=>e.surface));
+      if(surfs.size){
+        const dots=el("div",{class:"dots"});
+        ["芝","ダート","障害"].forEach(s=>{ if(surfs.has(s)) dots.appendChild(el("div",{class:"dot "+SURF_CLASS[s]})); });
+        cell.appendChild(dots);
+      }
+      const vs=venuesOn(iso);
+      if(vs.length){
+        const vc=el("div",{class:"venues"});
+        vs.slice(0,4).forEach(v=> vc.appendChild(el("span",{class:"vtag",text:v})));
+        cell.appendChild(vc);
+      }
+      g.appendChild(cell);
+    }
+  }
+
+  // ---------- シート(モーダル) ----------
+  function closeSheet(){ document.getElementById("sheetRoot").innerHTML=""; }
+  function openSheet(titleText, buildBody){
+    const root=document.getElementById("sheetRoot"); root.innerHTML="";
+    const backdrop=el("div",{class:"sheet-backdrop", onclick:(ev)=>{ if(ev.target===backdrop) closeSheet(); }});
+    const sheet=el("div",{class:"sheet"});
+    const head=el("h2",{}, [ el("span",{text:titleText}), el("button",{class:"x",text:"×",onclick:closeSheet}) ]);
+    sheet.appendChild(head);
+    buildBody(sheet);
+    backdrop.appendChild(sheet); root.appendChild(backdrop);
+  }
+
+  // 日別概要シート
+  function openDaySheet(iso){
+    openSheet(fmtDateJP(iso), (body)=>{
+      const vs=venuesOn(iso);
+      body.appendChild(el("button",{class:"btn full", style:"margin:4px 0 12px",
+        onclick:()=>openEditor({date:iso}), text:"＋ この日にメモを追加"}));
+      if(!vs.length){
+        body.appendChild(el("div",{class:"empty-state",text:"この日のメモはまだありません"}));
+        return;
+      }
+      vs.forEach(v=>{
+        const ve=entriesOn(iso).filter(e=>e.venue===v);
+        const surfChips=el("div",{class:"row"});
+        [...new Set(ve.map(e=>e.surface))].filter(Boolean).forEach(s=>
+          surfChips.appendChild(el("span",{class:"surf-chip "+SURF_CLASS[s], text:s})));
+        const kaisai = (ve[0].round&&ve[0].day)?`${ve[0].round}回${ve[0].day}日目`:"";
+        const btn=el("button",{class:"venue-btn", onclick:()=>openVenueSheet(iso, v)}, [
+          el("div",{}, [ el("div",{style:"font-weight:700",text:v}),
+            kaisai?el("div",{class:"kaisai",text:kaisai}):null ]),
+          el("div",{class:"row"}, [surfChips, el("span",{class:"muted",text:"›"})])
+        ]);
+        body.appendChild(btn);
+      });
+    });
+  }
+
+  // 開催場詳細シート(+前年比較)
+  function openVenueSheet(iso, venue){
+    openSheet(`${venue} — ${fmtDateJP(iso)}`, (body)=>{
+      const list=entriesOn(iso).filter(e=>e.venue===venue);
+      body.appendChild(el("button",{class:"btn ghost full", style:"margin-bottom:12px",
+        onclick:()=>openEditor({date:iso, venue}), text:"＋ この開催場にメモ追加"}));
+      SURFACES.forEach(surf=>{
+        const items=list.filter(e=>e.surface===surf);
+        if(!items.length) return;
+        items.forEach(e=> body.appendChild(entryCard(e, true)));
+      });
+      if(!list.length) body.appendChild(el("div",{class:"empty-state",text:"メモがありません"}));
+
+      // 前年同開催の比較
+      body.appendChild(el("div",{class:"divider"}));
+      body.appendChild(el("div",{class:"row between"},[
+        el("h3",{text:"🔁 前年同開催との比較"}),
+      ]));
+      let anyCmp=false;
+      (list.length?list:[{venue, date:iso, surface:"", round:"", day:""}]).forEach(base=>{
+        const pm=prevYearMatches(base);
+        if(pm.length){
+          anyCmp=true;
+          const box=el("div",{class:"cmp"});
+          box.appendChild(el("div",{class:"lbl",
+            text:(base.surface?base.surface+"の":"")+"前年同時期 → "+fmtDateJP(pm[0].date)}));
+          pm.slice(0,3).forEach(e=> box.appendChild(entryCard(e, false, true)));
+          body.appendChild(box);
+        }
+      });
+      if(!anyCmp) body.appendChild(el("div",{class:"small muted",style:"margin-top:6px",
+        text:"前年の同開催データがありません（回・日目を入力すると精度が上がります）"}));
+    });
+  }
+
+  // メモカード
+  function entryCard(e, editable, compact){
+    const card=el("div",{class:"card", style:compact?"margin-bottom:8px;background:var(--panel)":""});
+    const head=el("div",{class:"row between"});
+    const left=el("div",{class:"row"});
+    if(e.surface) left.appendChild(el("span",{class:"surf-chip "+SURF_CLASS[e.surface], text:e.surface}));
+    if(e.condition) left.appendChild(el("span",{class:"cond "+e.condition, text:e.condition}));
+    if(compact) left.appendChild(el("span",{class:"tiny muted", text:fmtDateJP(e.date)}));
+    head.appendChild(left);
+    if(editable){
+      head.appendChild(el("div",{class:"row"},[
+        el("button",{class:"tiny muted",style:"padding:4px 8px",text:"編集",onclick:()=>openEditor(e)}),
+        el("button",{class:"tiny",style:"padding:4px 8px;color:var(--danger)",text:"削除",onclick:()=>{
+          if(confirm("このメモを削除しますか？")){ removeEntry(e.id); closeSheet(); refreshAll(); toast("削除しました"); }
+        }})
+      ]));
+    }
+    card.appendChild(head);
+    if(!compact && e.venue){
+      const k=(e.round&&e.day)?`　${e.round}回${e.day}日目`:"";
+      card.appendChild(el("div",{class:"kaisai",style:"margin-top:4px",text:e.venue+k}));
+    }
+    if(e.memo) card.appendChild(el("div",{class:"memo-body",text:e.memo}));
+    if(e.tags && e.tags.length){
+      const tr=el("div",{class:"row",style:"margin-top:8px"});
+      e.tags.forEach(t=> tr.appendChild(el("span",{class:"tagchip",text:"#"+t})));
+      card.appendChild(tr);
+    }
+    return card;
+  }
+
+  // ---------- エディタ(メモ追加/編集) ----------
+  function openEditor(seed){
+    seed=seed||{};
+    const isEdit=!!seed.id;
+    let cur={
+      id:seed.id||null,
+      date:seed.date||todayISO(),
+      venue:seed.venue||"",
+      surface:seed.surface||"",
+      condition:seed.condition||"",
+      round:seed.round||"", day:seed.day||"",
+      tags:(seed.tags||[]).join(";"), memo:seed.memo||""
+    };
+    openSheet(isEdit?"メモを編集":"メモを追加", (body)=>{
+      // 日付
+      body.appendChild(el("label",{class:"fld",text:"開催日"}));
+      const dateIn=el("input",{type:"date", value:cur.date, oninput:e=>cur.date=e.target.value});
+      body.appendChild(dateIn);
+
+      // 開催場(まず選ぶ)
+      body.appendChild(el("label",{class:"fld",text:"① 開催場を選択"}));
+      const vseg=el("div",{class:"seg"});
+      function paintVenue(){ [...vseg.children].forEach(b=> b.classList.toggle("on", b.dataset.v===cur.venue)); }
+      VENUES.forEach(v=> vseg.appendChild(el("button",{"data-v":v, text:v, onclick:()=>{ cur.venue=v; paintVenue(); }})));
+      body.appendChild(vseg);
+      const vCustom=el("input",{type:"text", placeholder:"その他(大井・園田 等 自由入力)", value:VENUES.includes(cur.venue)?"":cur.venue,
+        oninput:e=>{ cur.venue=e.target.value; paintVenue(); }});
+      vCustom.style.marginTop="8px"; body.appendChild(vCustom);
+      paintVenue();
+
+      // 馬場(芝/ダート)
+      body.appendChild(el("label",{class:"fld",text:"② 馬場を選択"}));
+      const sseg=el("div",{class:"seg"});
+      function paintSurf(){ [...sseg.children].forEach(b=> b.classList.toggle("on", b.dataset.s===cur.surface)); }
+      SURFACES.forEach(s=> sseg.appendChild(el("button",{class:SURF_CLASS[s],"data-s":s, text:s, onclick:()=>{ cur.surface=s; paintSurf(); }})));
+      body.appendChild(sseg); paintSurf();
+
+      // 馬場状態
+      body.appendChild(el("label",{class:"fld",text:"馬場状態(任意)"}));
+      const cseg=el("div",{class:"seg"});
+      function paintCond(){ [...cseg.children].forEach(b=> b.classList.toggle("on", b.dataset.c===cur.condition)); }
+      CONDITIONS.forEach(c=> cseg.appendChild(el("button",{"data-c":c, text:c, onclick:()=>{ cur.condition=(cur.condition===c?"":c); paintCond(); }})));
+      body.appendChild(cseg); paintCond();
+
+      // 回・日目
+      body.appendChild(el("label",{class:"fld",text:"開催回・日目(任意 / 前年比較の精度向上)"}));
+      const kr=el("div",{class:"row"});
+      const rIn=el("input",{type:"text", inputmode:"numeric", placeholder:"回", value:cur.round, style:"flex:1", oninput:e=>cur.round=e.target.value.replace(/\D/g,"")});
+      const dIn=el("input",{type:"text", inputmode:"numeric", placeholder:"日目", value:cur.day, style:"flex:1", oninput:e=>cur.day=e.target.value.replace(/\D/g,"")});
+      kr.appendChild(rIn); kr.appendChild(el("span",{class:"muted",text:"回"})); kr.appendChild(dIn); kr.appendChild(el("span",{class:"muted",text:"日目"}));
+      body.appendChild(kr);
+
+      // タグ
+      body.appendChild(el("label",{class:"fld",text:"血統/傾向タグ(任意・; 区切り 例: 内有利;ディープ系;高速)"}));
+      body.appendChild(el("input",{type:"text", value:cur.tags, placeholder:"内有利;ディープ系;高速決着", oninput:e=>cur.tags=e.target.value}));
+
+      // メモ
+      body.appendChild(el("label",{class:"fld",text:"③ メモ"}));
+      const memoIn=el("textarea",{placeholder:"馬場の傾向、有利枠、血統傾向、含水率、時計 など", oninput:e=>cur.memo=e.target.value});
+      memoIn.value=cur.memo; body.appendChild(memoIn);
+
+      // 保存
+      const brow=el("div",{class:"btn-row"});
+      brow.appendChild(el("button",{class:"btn full",text:isEdit?"更新":"保存", onclick:()=>{
+        if(!cur.date){ toast("開催日を入力してください"); return; }
+        if(!cur.venue){ toast("開催場を選択してください"); return; }
+        if(!cur.surface){ toast("馬場(芝/ダート)を選択してください"); return; }
+        upsert({
+          id:cur.id, date:cur.date, venue:cur.venue, surface:cur.surface, condition:cur.condition,
+          round:cur.round, day:cur.day,
+          tags:cur.tags.split(/[;；]/).map(s=>s.trim()).filter(Boolean),
+          memo:cur.memo
+        });
+        closeSheet(); refreshAll(); toast(isEdit?"更新しました":"保存しました");
+      }}));
+      body.appendChild(brow);
+    });
+  }
+
+  // ---------- 履歴 ----------
+  function fillVenueFilter(){
+    const sel=document.getElementById("fltVenue");
+    const used=[...new Set(state.entries.map(e=>e.venue).filter(Boolean))]
+      .sort((a,b)=>{ const ia=VENUES.indexOf(a), ib=VENUES.indexOf(b);
+        return (ia<0?99:ia)-(ib<0?99:ib) || a.localeCompare(b,"ja"); });
+    const keep=sel.value;
+    sel.innerHTML=""; sel.appendChild(el("option",{value:"",text:"全開催場"}));
+    used.forEach(v=> sel.appendChild(el("option",{value:v,text:v})));
+    if([...sel.options].some(o=>o.value===keep)) sel.value=keep;
+  }
+  function renderHistory(){
+    const wrap=document.getElementById("historyList"); wrap.innerHTML="";
+    const fv=document.getElementById("fltVenue").value;
+    const fs=document.getElementById("fltSurface").value;
+    const sort=document.getElementById("fltSort").value;
+    let items=state.entries.filter(e=> (!fv||e.venue===fv) && (!fs||e.surface===fs));
+    if(!items.length){ wrap.appendChild(el("div",{class:"empty-state",text:"該当するメモがありません"})); return; }
+    if(sort==="date-desc") items.sort((a,b)=> (b.date||"").localeCompare(a.date||""));
+    else if(sort==="date-asc") items.sort((a,b)=> (a.date||"").localeCompare(b.date||""));
+
+    if(sort==="venue"){
+      const groups={};
+      items.forEach(e=>{ (groups[e.venue||"(未設定)"] ||= []).push(e); });
+      Object.keys(groups).sort((a,b)=>{ const ia=VENUES.indexOf(a), ib=VENUES.indexOf(b);
+        return (ia<0?99:ia)-(ib<0?99:ib) || a.localeCompare(b,"ja"); }).forEach(v=>{
+        wrap.appendChild(el("h3",{style:"margin:14px 0 6px",text:`${v}（${groups[v].length}）`}));
+        groups[v].sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+        groups[v].forEach(e=> wrap.appendChild(historyRow(e)));
+      });
+    } else {
+      items.forEach(e=> wrap.appendChild(historyRow(e)));
+    }
+  }
+  function historyRow(e){
+    const card=entryCard(e, true);
+    // 履歴では日付を見出しに
+    card.insertBefore(el("div",{class:"tiny muted",style:"margin-bottom:4px",
+      text:fmtDateJP(e.date)+(e.venue?`　${e.venue}`:"")}), card.firstChild);
+    return card;
+  }
+
+  // ---------- データ入出力 ----------
+  function doExportCSV(){
+    if(!state.entries.length){ toast("データがありません"); return; }
+    downloadFile(`baba_${todayISO()}.csv`, toCSV(state.entries), "text/csv;charset=utf-8");
+    toast("CSVを書き出しました");
+  }
+  function doExportJSON(){
+    const data={ app:"baba-calendar", version:1, exportedAt:new Date().toISOString(), entries:state.entries };
+    downloadFile(`baba_${todayISO()}.json`, JSON.stringify(data,null,2), "application/json");
+    toast("JSONを書き出しました");
+  }
+  function doTemplate(){
+    const sample=[normalizeEntry({date:todayISO(), venue:"東京", round:"1", day:"1", surface:"芝",
+      condition:"良", tags:["内有利","高速"], memo:"開幕週。前有利、内ラチ沿い伸びる。"})];
+    downloadFile("baba_template.csv", toCSV(sample), "text/csv;charset=utf-8");
+  }
+  function handleImportFile(file){
+    const reader=new FileReader();
+    reader.onload=()=>{
+      try{
+        const text=String(reader.result);
+        let incoming=[];
+        if(/\.json$/i.test(file.name) || text.trim().startsWith("{") || text.trim().startsWith("[")){
+          const j=JSON.parse(text);
+          incoming = Array.isArray(j) ? j : (Array.isArray(j.entries)? j.entries : []);
+        } else {
+          incoming = csvToEntries(text);
+        }
+        if(!incoming.length){ toast("追加できるデータがありませんでした"); return; }
+        let add=0, upd=0;
+        incoming.forEach(raw=>{
+          const has = raw.id && state.entries.some(e=>e.id===raw.id);
+          upsert(raw); has?upd++:add++;
+        });
+        refreshAll();
+        toast(`取込完了: 新規${add}件 / 更新${upd}件`);
+      }catch(err){ console.error(err); toast("読み込み失敗: "+err.message); }
+    };
+    reader.onerror=()=>toast("ファイル読込エラー");
+    reader.readAsText(file, "utf-8");
+  }
+
+  function updateStat(){
+    document.getElementById("statCount").textContent=`${state.entries.length}件`;
+  }
+
+  // ---------- タブ / 更新 ----------
+  function switchTab(tab){
+    currentTab=tab;
+    ["calendar","history","data"].forEach(t=>{
+      document.getElementById("view-"+t).classList.toggle("hidden", t!==tab);
+    });
+    document.querySelectorAll(".tabbar button").forEach(b=> b.classList.toggle("on", b.dataset.tab===tab));
+    document.getElementById("fab").classList.toggle("hidden", tab==="data");
+    if(tab==="history"){ fillVenueFilter(); renderHistory(); }
+    if(tab==="data") updateStat();
+  }
+  function refreshAll(){
+    renderCalendar();
+    if(currentTab==="history"){ fillVenueFilter(); renderHistory(); }
+    updateStat();
+  }
+
+  // ---------- 初期化 ----------
+  function init(){
+    load();
+    const now=new Date(); calYear=now.getFullYear(); calMonth=now.getMonth();
+    renderDow(); renderCalendar(); updateStat();
+
+    document.getElementById("prevMonth").onclick=()=>{ calMonth--; if(calMonth<0){calMonth=11;calYear--;} renderCalendar(); };
+    document.getElementById("nextMonth").onclick=()=>{ calMonth++; if(calMonth>11){calMonth=0;calYear++;} renderCalendar(); };
+    document.querySelectorAll(".tabbar button").forEach(b=> b.onclick=()=>switchTab(b.dataset.tab));
+    document.getElementById("fab").onclick=()=> openEditor({});
+
+    document.getElementById("fltVenue").onchange=renderHistory;
+    document.getElementById("fltSurface").onchange=renderHistory;
+    document.getElementById("fltSort").onchange=renderHistory;
+
+    document.getElementById("expCsv").onclick=doExportCSV;
+    document.getElementById("expJson").onclick=doExportJSON;
+    document.getElementById("dlTemplate").onclick=doTemplate;
+    document.getElementById("impFile").onchange=(e)=>{ const f=e.target.files[0]; if(f) handleImportFile(f); e.target.value=""; };
+    document.getElementById("wipe").onclick=()=>{
+      if(confirm("全てのメモを削除します。よろしいですか？（事前にエクスポート推奨）")){
+        state={entries:[]}; save(); refreshAll(); toast("全データを削除しました");
+      }
+    };
+  }
+  document.addEventListener("DOMContentLoaded", init);
+})();
+</script>
+</body>
+</html>
