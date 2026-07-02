@@ -938,11 +938,13 @@
       // ダート砂の産地割合(その日時点) + 推移
       const so=sandAsOf(venue, iso);
       if(so){
+        const hist=SAND_HISTORY[venue]||[];
+        const idx=hist.indexOf(so), isLatest=idx===hist.length-1;
+        const period = isLatest ? `最新・${so.date}〜` : `${so.date}〜${hist[idx+1].date}の前`;
         const sbox=el("div",{class:"cmp",style:"margin:0 0 12px"});
-        sbox.appendChild(el("div",{class:"tiny muted",text:`🏖️ ダート砂の産地割合（${so.date}時点・白砂${sandWhitePct(so.comp)}%）`}));
+        sbox.appendChild(el("div",{class:"tiny muted",text:`🏖️ ダート砂の産地割合（${period}・白砂${sandWhitePct(so.comp)}%）`}));
         sbox.appendChild(sandBar(so.comp));
         sbox.appendChild(sandLegend(so.comp));
-        const hist=SAND_HISTORY[venue]||[];
         if(hist.length>1){
           const hbtn=el("button",{class:"tiny",style:"color:var(--accent);margin-top:8px",text:"産地割合の推移を見る ▾"});
           const hbox=el("div",{style:"display:none;margin-top:6px"});
