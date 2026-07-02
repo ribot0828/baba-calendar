@@ -590,15 +590,15 @@
       venueWrap.appendChild(vseg);
       // 馬名(系統・見なし系統つき、タグなし)
       horseWrap.appendChild(el("label",{class:"fld",text:"馬名(日本語)"}));
-      const hjp=el("input",{type:"text",placeholder:"例: レイデオロ",value:cur.kind==="horse"?cur.subject:"",oninput:e=>{if(cur.kind==="horse")cur.subject=e.target.value;}});
+      const hjp=el("input",{type:"text",placeholder:"例: ディープインパクト",value:cur.kind==="horse"?cur.subject:"",oninput:e=>{if(cur.kind==="horse")cur.subject=e.target.value;}});
       horseWrap.appendChild(hjp);
       horseWrap.appendChild(el("label",{class:"fld",text:"馬の英名(任意・大小文字問わず判別)"}));
-      const hen=el("input",{type:"text",placeholder:"例: Rey de Oro",value:cur.kind==="horse"?cur.subjectEn:"",oninput:e=>{if(cur.kind==="horse")cur.subjectEn=e.target.value;}});
+      const hen=el("input",{type:"text",placeholder:"例: Deep Impact",value:cur.kind==="horse"?cur.subjectEn:"",oninput:e=>{if(cur.kind==="horse")cur.subjectEn=e.target.value;}});
       horseWrap.appendChild(hen);
       horseWrap.appendChild(el("label",{class:"fld",text:"系統(任意・英名は；の後に併記可)"}));
-      const hlin=el("input",{type:"text",placeholder:"例: ロベルト；Roberto",value:cur.lineage,oninput:e=>cur.lineage=e.target.value});
+      const hlin=el("input",{type:"text",placeholder:"例: サンデーサイレンス；Sunday Silence",value:cur.lineage,oninput:e=>cur.lineage=e.target.value});
       horseWrap.appendChild(hlin);
-      horseWrap.appendChild(el("label",{class:"fld",text:"見なし系統(任意・公式の血統が不明でも自分で仮に系統付けできます)"}));
+      horseWrap.appendChild(el("label",{class:"fld",text:"見なし系統(任意・実系統より強く出ているとみられる系統または血統があれば記入できます)"}));
       const hplin=el("input",{type:"text",placeholder:"例: ロベルト系",value:cur.presumedLineage,oninput:e=>cur.presumedLineage=e.target.value});
       horseWrap.appendChild(hplin);
       // 自由(タグなし)
