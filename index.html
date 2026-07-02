@@ -1050,7 +1050,7 @@
       function paintVenue(){ [...vseg.children].forEach(b=> b.classList.toggle("on", b.dataset.v===cur.venue)); }
       VENUES.forEach(v=> vseg.appendChild(el("button",{"data-v":v, text:v, onclick:()=>{ cur.venue=v; paintVenue(); applySched(); }})));
       body.appendChild(vseg);
-      const vCustom=el("input",{type:"text", placeholder:"その他(大井・園田 等 自由入力)", value:VENUES.includes(cur.venue)?"":cur.venue,
+      const vCustom=el("input",{type:"text", placeholder:"その他(例: 大井、ロンシャン 等 自由入力)", value:VENUES.includes(cur.venue)?"":cur.venue,
         oninput:e=>{ cur.venue=e.target.value; paintVenue(); applySched(); }});
       vCustom.style.marginTop="8px"; body.appendChild(vCustom);
       paintVenue();
