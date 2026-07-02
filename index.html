@@ -86,6 +86,8 @@
   .gchip.g1{background:#1f6fd0; color:#fff;} .gchip.g2{background:#c62828; color:#fff;}
   .gchip.g3{background:#2e7d32; color:#fff;} .gchip.jg{background:#7a5bd0; color:#fff;}
   .race-name{font-size:12px; margin:2px 0; line-height:1.4;}
+  .sandbar{display:flex; height:16px; border-radius:6px; overflow:hidden; border:1px solid var(--line); margin-top:4px;}
+  .sandseg{height:100%;}
   .memo-body{white-space:pre-wrap; word-break:break-word; margin-top:6px;}
   .kaisai{font-size:11px; color:var(--muted);}
 
@@ -426,6 +428,29 @@
   function jusyoFor(iso, venue){ return (JUSYO_BY[iso]||[]).filter(r=>r.venue===venue); }
   const GRADE_CLASS={"GⅠ":"g1","GⅡ":"g2","GⅢ":"g3","J・GⅠ":"jg","J・GⅡ":"jg","J・GⅢ":"jg"};
   function gchip(grade){ return el("span",{class:"gchip "+(GRADE_CLASS[grade]||""), text:grade}); }
+
+  // ---------- ダート砂の産地割合(JRA公表・Wayback復元 / 読み取り専用) ----------
+  // {venue:[{date:"YYYY-MM-DD", comp:[[産地,割合%]...]}...]} 変化点のみ。dateは公表確認日。
+  const SAND_HISTORY = {"札幌":[{"date":"2025-03-06","comp":[["青森",85],["新潟",15]]},{"date":"2026-06-12","comp":[["青森",90],["新潟",10]]}],"函館":[{"date":"2025-03-06","comp":[["青森",85],["宮城",10],["福島",5]]}],"福島":[{"date":"2025-03-06","comp":[["青森",65],["福島",20],["宮城",15]]},{"date":"2025-08-24","comp":[["青森",65],["福島",25],["宮城",10]]},{"date":"2026-06-12","comp":[["青森",55],["福島",20],["宮城",10],["豪アルバニー",15]]}],"新潟":[{"date":"2025-03-06","comp":[["青森",60],["新潟",40]]},{"date":"2025-08-24","comp":[["青森",65],["新潟",35]]},{"date":"2026-06-12","comp":[["青森",75],["新潟",25]]}],"東京":[{"date":"2025-03-06","comp":[["青森",75],["愛知",20],["新潟",5]]},{"date":"2025-08-24","comp":[["青森",75],["愛知",15],["豪アルバニー",10]]}],"中山":[{"date":"2025-03-06","comp":[["青森",100]]},{"date":"2025-08-24","comp":[["青森",90],["豪アルバニー",10]]}],"中京":[{"date":"2025-03-06","comp":[["青森",45],["愛知",45],["新潟",10]]},{"date":"2025-08-24","comp":[["青森",45],["愛知",50],["新潟",5]]},{"date":"2026-06-12","comp":[["青森",50],["愛知",45],["新潟",5]]}],"京都":[{"date":"2025-03-06","comp":[["青森",80],["愛知",15],["豪アルバニー",5]]}],"阪神":[{"date":"2025-03-06","comp":[["青森",55],["豪アルバニー",40],["宮崎",5]]}],"小倉":[{"date":"2025-03-06","comp":[["青森",65],["豪アルバニー",30],["宮崎",5]]},{"date":"2025-08-24","comp":[["青森",70],["豪アルバニー",25],["宮崎",5]]},{"date":"2026-06-12","comp":[["青森",65],["豪アルバニー",30],["宮崎",5]]}]};
+  const SAND_COLOR={"青森":"#3a3a3a","新潟":"#565656","宮城":"#7d7d7d","福島":"#b89a6a","愛知":"#c7a15c","宮崎":"#d8c07c","豪アルバニー":"#f2f2f2"};
+  function sandAsOf(venue, iso){
+    const h=SAND_HISTORY[venue]; if(!h||!h.length) return null;
+    let cur=null; for(const s of h){ if(s.date<=iso) cur=s; else break; } return cur;
+  }
+  function sandWhitePct(comp){ const w=(comp||[]).find(c=>c[0]==="豪アルバニー"); return w?w[1]:0; }
+  function sandBar(comp){
+    const bar=el("div",{class:"sandbar"});
+    (comp||[]).forEach(([o,p])=>{ const seg=el("div",{class:"sandseg"}); seg.style.width=p+"%";
+      seg.style.background=SAND_COLOR[o]||"#888"; if(o==="豪アルバニー") seg.style.boxShadow="inset 0 0 0 1px #999"; bar.appendChild(seg); });
+    return bar;
+  }
+  function sandLegend(comp){
+    const row=el("div",{class:"row",style:"flex-wrap:wrap; gap:8px; margin-top:6px"});
+    (comp||[]).forEach(([o,p])=>{ const s=el("span",{class:"tiny",style:"display:inline-flex;align-items:center;gap:4px"});
+      s.appendChild(el("span",{style:`display:inline-block;width:10px;height:10px;border-radius:2px;background:${SAND_COLOR[o]||"#888"};${o==="豪アルバニー"?"box-shadow:inset 0 0 0 1px #999;":""}`}));
+      s.appendChild(document.createTextNode(o+" "+p+"%")); row.appendChild(s); });
+    return row;
+  }
 
   function venuesOn(iso){
     const set=[];
@@ -909,6 +934,26 @@
         box.appendChild(el("div",{class:"tiny muted",style:"margin-bottom:2px",text:"この日の重賞"}));
         jr.forEach(r=> box.appendChild(el("div",{class:"race-name"},[gchip(r.grade)," "+r.name])));
         body.appendChild(box);
+      }
+      // ダート砂の産地割合(その日時点) + 推移
+      const so=sandAsOf(venue, iso);
+      if(so){
+        const sbox=el("div",{class:"cmp",style:"margin:0 0 12px"});
+        sbox.appendChild(el("div",{class:"tiny muted",text:`🏖️ ダート砂の産地割合（${so.date}時点・白砂${sandWhitePct(so.comp)}%）`}));
+        sbox.appendChild(sandBar(so.comp));
+        sbox.appendChild(sandLegend(so.comp));
+        const hist=SAND_HISTORY[venue]||[];
+        if(hist.length>1){
+          const hbtn=el("button",{class:"tiny",style:"color:var(--accent);margin-top:8px",text:"産地割合の推移を見る ▾"});
+          const hbox=el("div",{style:"display:none;margin-top:6px"});
+          hist.slice().reverse().forEach(s=>{ const r=el("div",{style:"margin:6px 0"});
+            r.appendChild(el("div",{class:"tiny muted",text:`${s.date}　白砂${sandWhitePct(s.comp)}%`}));
+            r.appendChild(sandBar(s.comp)); r.appendChild(sandLegend(s.comp)); hbox.appendChild(r); });
+          hbtn.onclick=()=>{ const op=hbox.style.display==="none"; hbox.style.display=op?"":"none"; hbtn.textContent=op?"産地割合の推移を隠す ▴":"産地割合の推移を見る ▾"; };
+          sbox.appendChild(hbtn); sbox.appendChild(hbox);
+        }
+        sbox.appendChild(el("div",{class:"tiny muted",style:"margin-top:6px",text:"※JRA公式の公表値をアーカイブから復元。日付は公表確認日で、実際の切替はその前後。"}));
+        body.appendChild(sbox);
       }
       body.appendChild(el("button",{class:"btn ghost full", style:"margin-bottom:12px",
         onclick:()=>openEditor({date:iso, venue}), text:"＋ この開催場にメモ追加"}));
