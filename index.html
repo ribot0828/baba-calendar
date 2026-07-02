@@ -84,6 +84,8 @@
   .tagchip{font-size:11px; padding:2px 8px; border-radius:20px; background:var(--chip); color:var(--accent);}
   .catchip{font-size:11px; padding:2px 8px; border-radius:6px; font-weight:700;}
   .catchip.cat-血統{background:#3a2f66; color:#d9c9ff;}
+  .catchip.cat-馬場{background:#2f5266; color:#bfe6ff;}
+  .catchip.cat-時計{background:#66502f; color:#ffe0b3;}
   .catchip.cat-収支{background:#1f5c3a; color:#b6ffd6;}
   .catchip.cat-その他{background:var(--chip); color:var(--muted);}
   .gchip{font-size:10px; padding:1px 6px; border-radius:20px; font-weight:700; background:var(--chip); color:var(--txt);}
@@ -221,7 +223,7 @@
     </div>
     <div class="divider"></div>
     <h3 class="small" style="margin-bottom:2px">🔎 範囲を指定して保存</h3>
-    <p class="small muted" style="margin-top:0">年・月・開催場・回・馬場で絞り込んだ分だけ書き出せます。</p>
+    <p class="small muted" style="margin-top:0">年・月・開催場・回・馬場・見出しで絞り込んだ分だけ書き出せます。</p>
     <div class="filterow" style="margin-top:8px">
       <select id="expYear"><option value="">全年</option></select>
       <select id="expMonth"><option value="">全月</option></select>
@@ -230,6 +232,15 @@
     <div class="filterow">
       <select id="expRound"><option value="">全開催回</option></select>
       <select id="expSurface"><option value="">全馬場</option><option>芝</option><option>ダート</option><option>障害</option></select>
+      <select id="expCategory">
+        <option value="">全見出し</option>
+        <option value="__EXCLUDE_INCOME__">収支以外すべて</option>
+        <option value="血統">血統</option>
+        <option value="馬場">馬場</option>
+        <option value="時計">時計</option>
+        <option value="収支">収支</option>
+        <option value="その他">その他</option>
+      </select>
     </div>
     <div class="small" id="expCount" style="margin:2px 0 8px;color:var(--accent2)"></div>
     <div class="btn-row" style="margin-top:0">
@@ -331,7 +342,8 @@
   const VENUES = ["札幌","函館","福島","新潟","東京","中山","中京","京都","阪神","小倉"];
   const SURFACES = ["芝","ダート","障害"];
   const CONDITIONS = ["良","稍重","重","不良"];
-  const MEMO_CATEGORIES = ["血統","収支","その他"];
+  const MEMO_CATEGORIES = ["血統","馬場","時計","収支","その他"];
+  const EXP_CAT_EXCLUDE_INCOME = "__EXCLUDE_INCOME__"; // 「収支以外すべて」の一括選択用の特別値
   const SURF_CLASS = {"芝":"turf","ダート":"dirt","障害":"jump"};
   const DOW = ["日","月","火","水","木","金","土"];
 
@@ -1177,9 +1189,9 @@
     const header=["date","venue","surface","condition","round","day","tags","memo"];
     const rows=[
       ["2025-06-01","東京","芝","良","2","12","血統","ディープインパクト産駒が好走。東京替わりで反応良い。"],
-      ["2025-06-01","東京","ダート","良","2","12","","時計速め、逃げ先行有利。"],
+      ["2025-06-01","東京","ダート","良","2","12","時計","時計速め、逃げ先行有利。"],
       ["2025-01-05","中山","芝","稍重","","","収支","複勝的中、回収率120%。"],
-      ["2025-03-30","阪神","芝","良","","","血統","ロードカナロア産駒が上位独占。高速馬場向き。"],
+      ["2025-03-30","阪神","芝","良","","","馬場","内枠絶対有利、高速馬場。"],
       ["2025-05-18","京都","ダート","重","","","その他","脚抜き良好、パワー型が台頭。"],
       ["2025-01-19","中京","芝","良","","","","記入例。空欄OK。"],
       ["2024-08-04","札幌","芝","良","","","その他","洋芝で消耗戦、差し届きにくい。"],
@@ -1210,7 +1222,7 @@
 "- condition: 馬場状態。良 / 稍重 / 重 / 不良 のいずれか（不明なら空欄）",
 "- round: 開催回(数字)。不明なら空欄",
 "- day: 開催何日目(数字)。不明なら空欄",
-"- tags: このメモの見出し。血統 / 収支 / その他 のいずれか一つ（該当なければ空欄）",
+"- tags: このメモの見出し。血統 / 馬場 / 時計 / 収支 / その他 のいずれか一つ（該当なければ空欄）",
 "- memo: 馬場についての所感を自由記述",
 "",
 "【CSVの注意】",
@@ -1245,7 +1257,7 @@
   function expSel(id){ return document.getElementById(id); }
   function filteredForExport(){
     const y=expSel("expYear").value, m=expSel("expMonth").value, v=expSel("expVenue").value,
-          r=expSel("expRound").value, s=expSel("expSurface").value;
+          r=expSel("expRound").value, s=expSel("expSurface").value, cat=expSel("expCategory").value;
     return state.entries.filter(e=>{
       const d=parseISO(e.date);
       if(y && (!d || d.getFullYear()!=+y)) return false;
@@ -1253,6 +1265,10 @@
       if(v && e.venue!==v) return false;
       if(r && String(e.round)!==r) return false;
       if(s && e.surface!==s) return false;
+      if(cat){
+        if(cat===EXP_CAT_EXCLUDE_INCOME){ if((e.tags||[]).includes("収支")) return false; }
+        else if(!(e.tags||[]).includes(cat)) return false;
+      }
       return true;
     });
   }
@@ -1263,6 +1279,8 @@
     if(expSel("expVenue").value) p.push(expSel("expVenue").value);
     if(expSel("expRound").value) p.push(expSel("expRound").value+"回");
     if(expSel("expSurface").value) p.push(expSel("expSurface").value);
+    const catVal=expSel("expCategory").value;
+    if(catVal) p.push(catVal===EXP_CAT_EXCLUDE_INCOME?"収支以外":catVal);
     return "baba_"+(p.length?p.join("_"):"range");
   }
   function populateExpFilters(){
@@ -1294,7 +1312,7 @@
     if(kind==="csv") downloadFile(expFileBase()+".csv", toCSV(list), "text/csv;charset=utf-8");
     else downloadFile(expFileBase()+".json", JSON.stringify({app:"baba-calendar",version:1,
       exportedAt:new Date().toISOString(),
-      filter:{year:expSel("expYear").value,month:expSel("expMonth").value,venue:expSel("expVenue").value,round:expSel("expRound").value,surface:expSel("expSurface").value},
+      filter:{year:expSel("expYear").value,month:expSel("expMonth").value,venue:expSel("expVenue").value,round:expSel("expRound").value,surface:expSel("expSurface").value,category:expSel("expCategory").value},
       entries:list},null,2), "application/json");
     toast(`${list.length}件を書き出しました`);
   }
@@ -1386,7 +1404,7 @@
     document.getElementById("expJson").onclick=doExportJSON;
     document.getElementById("dlTemplate").onclick=doTemplate;
     document.getElementById("aiPrompt").onclick=showAIPrompt;
-    ["expYear","expMonth","expVenue","expRound","expSurface"].forEach(id=> document.getElementById(id).onchange=refreshExpCount);
+    ["expYear","expMonth","expVenue","expRound","expSurface","expCategory"].forEach(id=> document.getElementById(id).onchange=refreshExpCount);
     document.getElementById("expRangeCsv").onclick=()=>doExportRange("csv");
     document.getElementById("expRangeJson").onclick=()=>doExportRange("json");
     document.getElementById("impFile").onchange=(e)=>{ const f=e.target.files[0]; if(f) handleImportFile(f); e.target.value=""; };
