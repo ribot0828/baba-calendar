@@ -244,11 +244,28 @@
   </div>
 </section>
 
+<!-- 一般メモ(開催日に依存しない項目別メモ) -->
+<section id="view-notes" class="view hidden">
+  <h2 class="row between" style="justify-content:space-between">一般メモ <span class="muted small" id="notesStat"></span></h2>
+  <p class="small muted" style="margin-top:0">開催日に関係なく、項目（開催場・海外/地方・馬名など）ごとにメモを残せます。</p>
+  <input type="text" id="noteSearch" placeholder="🔍 項目・英名・メモを検索（大小文字問わず）" style="margin-bottom:10px">
+  <div id="notesList"></div>
+  <div class="card" style="margin-top:12px">
+    <h3>データ入出力（一般メモ）</h3>
+    <div class="btn-row">
+      <button class="btn full" id="notesExpCsv">CSVで保存</button>
+      <button class="btn ghost full" id="notesExpJson">JSONで保存</button>
+    </div>
+    <input type="file" id="notesImpFile" accept=".csv,.json,text/csv,application/json" style="margin-top:10px">
+  </div>
+</section>
+
 <button class="fab hidden" id="fab">＋</button>
 
 <nav class="tabbar">
   <button data-tab="calendar" class="on"><span class="ic">📅</span>カレンダー</button>
   <button data-tab="history"><span class="ic">📖</span>履歴</button>
+  <button data-tab="notes"><span class="ic">🗒️</span>一般メモ</button>
   <button data-tab="data"><span class="ic">💾</span>データ</button>
 </nav>
 
@@ -267,7 +284,7 @@
   const DOW = ["日","月","火","水","木","金","土"];
 
   // ---------- 状態 ----------
-  let state = { entries: [] };
+  let state = { entries: [], notes: [] };
   let calYear, calMonth; // 表示中の年月
   let currentTab = "calendar";
 
@@ -317,6 +334,8 @@
       const raw=localStorage.getItem(STORAGE_KEY);
       if(raw){ const j=JSON.parse(raw); if(j && Array.isArray(j.entries)) state=j; }
     }catch(e){ console.warn("load失敗",e); }
+    if(!Array.isArray(state.entries)) state.entries=[];
+    if(!Array.isArray(state.notes)) state.notes=[];
   }
   function save(){
     try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
@@ -398,6 +417,158 @@
       return Math.abs(daysBetween(a.date,py))-Math.abs(daysBetween(b.date,py));
     });
     return cands;
+  }
+
+  // ---------- 一般メモ(項目別・開催日に依存しない) ----------
+  const NOTE_KINDS={venue:"開催場",horse:"馬名",other:"自由"};
+  function normalizeNote(n){
+    return {
+      id:n.id||uid(),
+      kind:["venue","horse","other"].includes(n.kind)?n.kind:"other",
+      subject:(n.subject||"").trim(),
+      subjectEn:(n.subjectEn||"").trim(),
+      tags:Array.isArray(n.tags)?n.tags.filter(Boolean)
+           :(typeof n.tags==="string"&&n.tags?n.tags.split(/[;；]/).map(s=>s.trim()).filter(Boolean):[]),
+      memo:n.memo||"",
+      createdAt:n.createdAt||new Date().toISOString(),
+      updatedAt:n.updatedAt||new Date().toISOString()
+    };
+  }
+  function upsertNote(n){
+    n=normalizeNote(n);
+    const i=state.notes.findIndex(x=>x.id===n.id);
+    if(i>=0){ n.createdAt=state.notes[i].createdAt; n.updatedAt=new Date().toISOString(); state.notes[i]=n; }
+    else state.notes.push(n);
+    save(); return n;
+  }
+  function removeNote(id){ state.notes=state.notes.filter(n=>n.id!==id); save(); }
+  // 同一項目キー: 英名優先・大小文字無視で判別
+  function noteKey(n){ return ((n.subjectEn||n.subject||"").trim().toLowerCase())+"|"+n.kind; }
+  function noteDisplay(n){ return n.subject + (n.subjectEn? "（"+n.subjectEn+"）" : ""); }
+
+  function renderNotes(){
+    document.getElementById("notesStat").textContent=`${state.notes.length}件`;
+    const wrap=document.getElementById("notesList"); wrap.innerHTML="";
+    const q=(document.getElementById("noteSearch").value||"").trim().toLowerCase();
+    let notes=state.notes;
+    if(q) notes=notes.filter(n=>(n.subject+" "+n.subjectEn+" "+n.memo+" "+(n.tags||[]).join(" ")).toLowerCase().includes(q));
+    if(!notes.length){ wrap.appendChild(el("div",{class:"empty-state",
+      text: state.notes.length? "該当する項目・メモがありません":"まだ一般メモがありません。右下の＋から項目を作ってメモを追加できます。"})); return; }
+    const groups={};
+    notes.forEach(n=>{ const k=noteKey(n); (groups[k]||(groups[k]={disp:noteDisplay(n),kind:n.kind,items:[]})).items.push(n); });
+    const ord={venue:0,horse:1,other:2};
+    Object.values(groups).sort((a,b)=>(ord[a.kind]-ord[b.kind])||a.disp.localeCompare(b.disp,"ja")).forEach(g=>{
+      const card=el("div",{class:"card"});
+      const head=el("div",{class:"row between"});
+      head.appendChild(el("div",{class:"row"},[ el("span",{class:"cond",text:NOTE_KINDS[g.kind]}), el("span",{style:"font-weight:700",text:g.disp}) ]));
+      head.appendChild(el("button",{class:"tiny",style:"color:var(--accent);padding:4px 8px",text:"＋メモ",
+        onclick:()=>{ const s=g.items[0]; openNoteEditor({kind:s.kind,subject:s.subject,subjectEn:s.subjectEn}); }}));
+      card.appendChild(head);
+      g.items.slice().sort((a,b)=>(b.updatedAt||"").localeCompare(a.updatedAt||"")).forEach(n=> card.appendChild(noteCard(n)));
+      wrap.appendChild(card);
+    });
+  }
+  function noteCard(n){
+    const box=el("div",{style:"border-top:1px solid var(--line);margin-top:8px;padding-top:8px"});
+    if(n.memo) box.appendChild(el("div",{class:"memo-body",text:n.memo}));
+    if(n.tags&&n.tags.length){ const tr=el("div",{class:"row",style:"margin-top:6px"}); n.tags.forEach(t=>tr.appendChild(el("span",{class:"tagchip",text:"#"+t}))); box.appendChild(tr); }
+    const foot=el("div",{class:"row between",style:"margin-top:6px"});
+    foot.appendChild(el("span",{class:"tiny muted",text:(n.updatedAt||"").slice(0,10)}));
+    foot.appendChild(el("div",{class:"row"},[
+      el("button",{class:"tiny muted",style:"padding:4px 8px",text:"編集",onclick:()=>openNoteEditor(n)}),
+      el("button",{class:"tiny",style:"padding:4px 8px;color:var(--danger)",text:"削除",onclick:()=>{
+        if(confirm("このメモを削除しますか？")){ removeNote(n.id); renderNotes(); toast("削除しました"); } }})
+    ]));
+    box.appendChild(foot);
+    return box;
+  }
+  function openNoteEditor(seed){
+    seed=seed||{};
+    const isEdit=!!seed.id;
+    let cur={ id:seed.id||null, kind:seed.kind||"venue", subject:seed.subject||"", subjectEn:seed.subjectEn||"", tags:(seed.tags||[]).join(";"), memo:seed.memo||"" };
+    openSheet(isEdit?"一般メモを編集":"一般メモを追加",(body)=>{
+      body.appendChild(el("label",{class:"fld",text:"① 種類"}));
+      const kseg=el("div",{class:"seg"});
+      const venueWrap=el("div"), horseWrap=el("div"), freeWrap=el("div");
+      // 開催場ボタン
+      const vseg=el("div",{class:"seg",style:"margin-top:8px"});
+      function paintVenue(){ [...vseg.children].forEach(b=>b.classList.toggle("on",b.dataset.v===cur.subject)); }
+      VENUES.forEach(v=> vseg.appendChild(el("button",{"data-v":v,text:v,onclick:()=>{ cur.subject=v; paintVenue(); }})));
+      venueWrap.appendChild(vseg);
+      // 馬名
+      horseWrap.appendChild(el("label",{class:"fld",text:"馬名(日本語)"}));
+      const hjp=el("input",{type:"text",placeholder:"例: ディープインパクト",value:seed.kind==="horse"?cur.subject:"",oninput:e=>{if(cur.kind==="horse")cur.subject=e.target.value;}});
+      horseWrap.appendChild(hjp);
+      horseWrap.appendChild(el("label",{class:"fld",text:"英名(任意・大小文字問わず判別)"}));
+      const hen=el("input",{type:"text",placeholder:"例: Deep Impact",value:cur.subjectEn,oninput:e=>cur.subjectEn=e.target.value});
+      horseWrap.appendChild(hen);
+      // 自由
+      freeWrap.appendChild(el("label",{class:"fld",text:"項目名(海外・地方・自由)"}));
+      const fin=el("input",{type:"text",placeholder:"例: 香港シャティン / 大井 / 凱旋門賞 など",value:seed.kind==="other"?cur.subject:"",oninput:e=>{if(cur.kind==="other")cur.subject=e.target.value;}});
+      freeWrap.appendChild(fin);
+      function paintKind(){
+        [...kseg.children].forEach(b=>b.classList.toggle("on",b.dataset.k===cur.kind));
+        venueWrap.style.display=cur.kind==="venue"?"":"none";
+        horseWrap.style.display=cur.kind==="horse"?"":"none";
+        freeWrap.style.display=cur.kind==="other"?"":"none";
+      }
+      [["venue","JRA開催場"],["horse","馬名"],["other","自由(海外/地方等)"]].forEach(([k,label])=>
+        kseg.appendChild(el("button",{"data-k":k,text:label,onclick:()=>{ cur.kind=k; paintKind(); }})));
+      body.appendChild(kseg);
+      body.appendChild(venueWrap); body.appendChild(horseWrap); body.appendChild(freeWrap);
+      if(cur.kind==="venue") paintVenue();
+      paintKind();
+      body.appendChild(el("label",{class:"fld",text:"タグ(任意・; 区切り)"}));
+      body.appendChild(el("input",{type:"text",value:cur.tags,placeholder:"得意;左回り○;道悪巧者",oninput:e=>cur.tags=e.target.value}));
+      body.appendChild(el("label",{class:"fld",text:"② メモ"}));
+      const ta=el("textarea",{placeholder:"自由に記入(開催日に関係なく残せます)",oninput:e=>cur.memo=e.target.value}); ta.value=cur.memo; body.appendChild(ta);
+      const brow=el("div",{class:"btn-row"});
+      brow.appendChild(el("button",{class:"btn full",text:isEdit?"更新":"保存",onclick:()=>{
+        const subj = cur.kind==="venue"?cur.subject.trim() : (cur.kind==="horse"?hjp.value.trim() : fin.value.trim());
+        const subEn = cur.kind==="horse"?hen.value.trim():"";
+        if(!subj){ toast(cur.kind==="venue"?"開催場を選択してください":"項目名を入力してください"); return; }
+        if(!cur.memo.trim()){ toast("メモを入力してください"); return; }
+        upsertNote({id:cur.id,kind:cur.kind,subject:subj,subjectEn:subEn,
+          tags:cur.tags.split(/[;；]/).map(s=>s.trim()).filter(Boolean),memo:cur.memo});
+        closeSheet(); renderNotes(); toast(isEdit?"更新しました":"保存しました");
+      }}));
+      body.appendChild(brow);
+    });
+  }
+  // 一般メモ CSV/JSON
+  const NOTE_COLS=["id","kind","subject","subjectEn","tags","memo","createdAt","updatedAt"];
+  function notesToCSV(notes){
+    const lines=[NOTE_COLS.join(",")];
+    notes.forEach(n=> lines.push(NOTE_COLS.map(c=> c==="tags"?csvSafe((n.tags||[]).join(";")):csvSafe(n[c])).join(",")));
+    return "﻿"+lines.join("\r\n");
+  }
+  function csvToNotes(text){
+    const rows=parseCSV(text); if(!rows.length) return [];
+    const header=rows[0].map(h=>h.trim()); const idx={}; NOTE_COLS.forEach(c=>idx[c]=header.indexOf(c));
+    if(idx.subject<0) throw new Error("CSVヘッダに subject 列が必要です");
+    const out=[];
+    for(let r=1;r<rows.length;r++){ const row=rows[r]; const g=c=> idx[c]>=0?stripCsvGuard(row[idx[c]]||""):"";
+      const o={ id:g("id"), kind:g("kind").trim()||"other", subject:g("subject").trim(), subjectEn:g("subjectEn").trim(),
+        tags:g("tags"), memo:g("memo"), createdAt:g("createdAt")||undefined, updatedAt:g("updatedAt")||undefined };
+      if(!o.subject && !o.memo) continue; out.push(o);
+    }
+    return out;
+  }
+  function doNotesExportCSV(){ if(!state.notes.length){toast("データがありません");return;}
+    downloadFile(`baba_notes_${todayISO()}.csv`, notesToCSV(state.notes), "text/csv;charset=utf-8"); toast("CSVを書き出しました"); }
+  function doNotesExportJSON(){ const d={app:"baba-calendar",type:"notes",version:1,exportedAt:new Date().toISOString(),notes:state.notes};
+    downloadFile(`baba_notes_${todayISO()}.json`, JSON.stringify(d,null,2),"application/json"); toast("JSONを書き出しました"); }
+  function handleNotesImport(file){
+    const reader=new FileReader();
+    reader.onload=()=>{ try{
+      const text=String(reader.result); let incoming=[];
+      if(/\.json$/i.test(file.name)||text.trim().startsWith("{")||text.trim().startsWith("[")){ const j=JSON.parse(text); incoming=Array.isArray(j)?j:(Array.isArray(j.notes)?j.notes:[]); }
+      else incoming=csvToNotes(text);
+      if(!incoming.length){ toast("追加できるデータがありませんでした"); return; }
+      let add=0,upd=0; incoming.forEach(raw=>{ const has=raw.id&&state.notes.some(n=>n.id===raw.id); upsertNote(raw); has?upd++:add++; });
+      renderNotes(); toast(`取込完了: 新規${add}件 / 更新${upd}件`);
+    }catch(err){ console.error(err); toast("読み込み失敗: "+err.message); } };
+    reader.onerror=()=>toast("ファイル読込エラー"); reader.readAsText(file,"utf-8");
   }
 
   // ---------- CSV ----------
@@ -942,12 +1113,13 @@
   // ---------- タブ / 更新 ----------
   function switchTab(tab){
     currentTab=tab;
-    ["calendar","history","data"].forEach(t=>{
+    ["calendar","history","notes","data"].forEach(t=>{
       document.getElementById("view-"+t).classList.toggle("hidden", t!==tab);
     });
     document.querySelectorAll(".tabbar button").forEach(b=> b.classList.toggle("on", b.dataset.tab===tab));
     document.getElementById("fab").classList.toggle("hidden", tab==="data");
     if(tab==="history"){ fillVenueFilter(); renderHistory(); }
+    if(tab==="notes") renderNotes();
     if(tab==="data"){ updateStat(); populateExpFilters(); }
   }
   function refreshAll(){
@@ -970,7 +1142,11 @@
     document.getElementById("selYear").onchange=(e)=>{ calYear=+e.target.value; renderCalendar(); };
     selMonth.onchange=(e)=>{ calMonth=+e.target.value; renderCalendar(); };
     document.querySelectorAll(".tabbar button").forEach(b=> b.onclick=()=>switchTab(b.dataset.tab));
-    document.getElementById("fab").onclick=()=> openEditor({});
+    document.getElementById("fab").onclick=()=>{ if(currentTab==="notes") openNoteEditor({}); else openEditor({}); };
+    document.getElementById("noteSearch").oninput=renderNotes;
+    document.getElementById("notesExpCsv").onclick=doNotesExportCSV;
+    document.getElementById("notesExpJson").onclick=doNotesExportJSON;
+    document.getElementById("notesImpFile").onchange=(e)=>{ const f=e.target.files[0]; if(f) handleNotesImport(f); e.target.value=""; };
 
     document.getElementById("fltVenue").onchange=renderHistory;
     document.getElementById("fltSurface").onchange=renderHistory;
@@ -985,8 +1161,8 @@
     document.getElementById("expRangeJson").onclick=()=>doExportRange("json");
     document.getElementById("impFile").onchange=(e)=>{ const f=e.target.files[0]; if(f) handleImportFile(f); e.target.value=""; };
     document.getElementById("wipe").onclick=()=>{
-      if(confirm("全てのメモを削除します。よろしいですか？（事前にエクスポート推奨）")){
-        state={entries:[]}; save(); refreshAll(); toast("全データを削除しました");
+      if(confirm("全てのメモ(カレンダー＋一般メモ)を削除します。よろしいですか？（事前にエクスポート推奨）")){
+        state={entries:[],notes:[]}; save(); refreshAll(); renderNotes(); toast("全データを削除しました");
       }
     };
   }
