@@ -285,7 +285,7 @@
 <!-- 一般メモ(開催日に依存しない項目別メモ) -->
 <section id="view-notes" class="view hidden">
   <h2 class="row between" style="justify-content:space-between">一般メモ <span class="muted small" id="notesStat"></span></h2>
-  <p class="small muted" style="margin-top:0">開催日に関係なく、項目（開催場・海外/地方・馬名など）ごとにメモを残せます。</p>
+  <p class="small muted" style="margin-top:0">開催日に関係なく、項目（馬名・系統）ごとにメモを残せます。</p>
   <input type="text" id="noteSearch" placeholder="🔍 項目・英名・メモを検索（大小文字問わず）" style="margin-bottom:10px">
   <div id="notesList"></div>
 
@@ -300,7 +300,7 @@
     <h3 class="small" style="margin-bottom:2px">🔎 項目で絞り込んで保存</h3>
     <p class="small muted" style="margin-top:0">種類・項目で絞り込んだ分だけ書き出せます。</p>
     <div class="filterow" style="margin-top:8px">
-      <select id="notesExpKind"><option value="">全種類</option><option value="venue">開催場</option><option value="horse">馬名</option><option value="other">自由</option></select>
+      <select id="notesExpKind"><option value="">全種類</option><option value="horse">馬名</option><option value="lineage">系統</option></select>
       <select id="notesExpSubject"><option value="">全項目</option></select>
     </div>
     <div class="small" id="notesExpCount" style="margin:2px 0 8px; color:var(--accent2)"></div>
@@ -507,13 +507,14 @@
   }
 
   // ---------- 一般メモ(項目別・開催日に依存しない) ----------
-  const NOTE_KINDS={venue:"開催場",horse:"馬名",other:"自由"};
+  const NOTE_KINDS={horse:"馬名",lineage:"系統"};
   function normalizeNote(n){
     return {
       id:n.id||uid(),
-      kind:["venue","horse","other"].includes(n.kind)?n.kind:"other",
+      kind:["horse","lineage"].includes(n.kind)?n.kind:"horse",
       subject:(n.subject||"").trim(),
       subjectEn:(n.subjectEn||"").trim(),
+      presumedLineage:(n.presumedLineage||"").trim(),
       tags:Array.isArray(n.tags)?n.tags.filter(Boolean)
            :(typeof n.tags==="string"&&n.tags?n.tags.split(/[;；]/).map(s=>s.trim()).filter(Boolean):[]),
       memo:n.memo||"",
@@ -539,18 +540,18 @@
     const wrap=document.getElementById("notesList"); wrap.innerHTML="";
     const q=(document.getElementById("noteSearch").value||"").trim().toLowerCase();
     let notes=state.notes;
-    if(q) notes=notes.filter(n=>(n.subject+" "+n.subjectEn+" "+n.memo+" "+(n.tags||[]).join(" ")).toLowerCase().includes(q));
+    if(q) notes=notes.filter(n=>(n.subject+" "+n.subjectEn+" "+(n.presumedLineage||"")+" "+n.memo+" "+(n.tags||[]).join(" ")).toLowerCase().includes(q));
     if(!notes.length){ wrap.appendChild(el("div",{class:"empty-state",
       text: state.notes.length? "該当する項目・メモがありません":"まだ一般メモがありません。右下の＋から項目を作ってメモを追加できます。"})); return; }
     const groups={};
     notes.forEach(n=>{ const k=noteKey(n); (groups[k]||(groups[k]={disp:noteDisplay(n),kind:n.kind,items:[]})).items.push(n); });
-    const ord={venue:0,horse:1,other:2};
+    const ord={horse:0,lineage:1};
     Object.values(groups).sort((a,b)=>(ord[a.kind]-ord[b.kind])||a.disp.localeCompare(b.disp,"ja")).forEach(g=>{
       const card=el("div",{class:"card"});
       const head=el("div",{class:"row between"});
       head.appendChild(el("div",{class:"row"},[ el("span",{class:"cond",text:NOTE_KINDS[g.kind]}), el("span",{style:"font-weight:700",text:g.disp}) ]));
       head.appendChild(el("button",{class:"tiny",style:"color:var(--accent);padding:4px 8px",text:"＋メモ",
-        onclick:()=>{ const s=g.items[0]; openNoteEditor({kind:s.kind,subject:s.subject,subjectEn:s.subjectEn}); }}));
+        onclick:()=>{ const s=g.items[0]; openNoteEditor({kind:s.kind,subject:s.subject,subjectEn:s.subjectEn,presumedLineage:s.presumedLineage}); }}));
       card.appendChild(head);
       g.items.slice().sort((a,b)=>(b.updatedAt||"").localeCompare(a.updatedAt||"")).forEach(n=> card.appendChild(noteCard(n)));
       wrap.appendChild(card);
@@ -558,6 +559,7 @@
   }
   function noteCard(n){
     const box=el("div",{style:"border-top:1px solid var(--line);margin-top:8px;padding-top:8px"});
+    if(n.kind==="horse" && n.presumedLineage) box.appendChild(el("div",{class:"tiny muted",text:"見なし系統: "+n.presumedLineage}));
     if(n.memo) box.appendChild(el("div",{class:"memo-body",text:n.memo}));
     if(n.tags&&n.tags.length){ const tr=el("div",{class:"row",style:"margin-top:6px"}); n.tags.forEach(t=>tr.appendChild(el("span",{class:"tagchip",text:"#"+t}))); box.appendChild(tr); }
     const foot=el("div",{class:"row between",style:"margin-top:6px"});
@@ -573,38 +575,38 @@
   function openNoteEditor(seed){
     seed=seed||{};
     const isEdit=!!seed.id;
-    let cur={ id:seed.id||null, kind:seed.kind||"venue", subject:seed.subject||"", subjectEn:seed.subjectEn||"", tags:(seed.tags||[]).join(";"), memo:seed.memo||"" };
+    let cur={ id:seed.id||null, kind:seed.kind||"horse", subject:seed.subject||"", subjectEn:seed.subjectEn||"",
+      presumedLineage:seed.presumedLineage||"", tags:(seed.tags||[]).join(";"), memo:seed.memo||"" };
     openSheet(isEdit?"一般メモを編集":"一般メモを追加",(body)=>{
       body.appendChild(el("label",{class:"fld",text:"① 種類"}));
       const kseg=el("div",{class:"seg"});
-      const venueWrap=el("div"), horseWrap=el("div"), freeWrap=el("div");
-      // 開催場ボタン
-      const vseg=el("div",{class:"seg",style:"margin-top:8px"});
-      function paintVenue(){ [...vseg.children].forEach(b=>b.classList.toggle("on",b.dataset.v===cur.subject)); }
-      VENUES.forEach(v=> vseg.appendChild(el("button",{"data-v":v,text:v,onclick:()=>{ cur.subject=v; paintVenue(); }})));
-      venueWrap.appendChild(vseg);
+      const horseWrap=el("div"), lineageWrap=el("div");
       // 馬名
       horseWrap.appendChild(el("label",{class:"fld",text:"馬名(日本語)"}));
-      const hjp=el("input",{type:"text",placeholder:"例: ディープインパクト",value:seed.kind==="horse"?cur.subject:"",oninput:e=>{if(cur.kind==="horse")cur.subject=e.target.value;}});
+      const hjp=el("input",{type:"text",placeholder:"例: レイデオロ",value:cur.kind==="horse"?cur.subject:"",oninput:e=>{if(cur.kind==="horse")cur.subject=e.target.value;}});
       horseWrap.appendChild(hjp);
       horseWrap.appendChild(el("label",{class:"fld",text:"英名(任意・大小文字問わず判別)"}));
-      const hen=el("input",{type:"text",placeholder:"例: Deep Impact",value:cur.subjectEn,oninput:e=>cur.subjectEn=e.target.value});
+      const hen=el("input",{type:"text",placeholder:"例: Rey de Oro",value:cur.kind==="horse"?cur.subjectEn:"",oninput:e=>{if(cur.kind==="horse")cur.subjectEn=e.target.value;}});
       horseWrap.appendChild(hen);
-      // 自由
-      freeWrap.appendChild(el("label",{class:"fld",text:"項目名(海外・地方・自由)"}));
-      const fin=el("input",{type:"text",placeholder:"例: 香港シャティン / 大井 / 凱旋門賞 など",value:seed.kind==="other"?cur.subject:"",oninput:e=>{if(cur.kind==="other")cur.subject=e.target.value;}});
-      freeWrap.appendChild(fin);
+      horseWrap.appendChild(el("label",{class:"fld",text:"見なし系統(任意・公式の血統が不明でも自分で仮に系統付けできます)"}));
+      const hlin=el("input",{type:"text",placeholder:"例: ロベルト系",value:cur.presumedLineage,oninput:e=>cur.presumedLineage=e.target.value});
+      horseWrap.appendChild(hlin);
+      // 系統
+      lineageWrap.appendChild(el("label",{class:"fld",text:"系統名(日本語)"}));
+      const ljp=el("input",{type:"text",placeholder:"例: ロベルト",value:cur.kind==="lineage"?cur.subject:"",oninput:e=>{if(cur.kind==="lineage")cur.subject=e.target.value;}});
+      lineageWrap.appendChild(ljp);
+      lineageWrap.appendChild(el("label",{class:"fld",text:"英名(任意・大小文字問わず判別)"}));
+      const len=el("input",{type:"text",placeholder:"例: Roberto",value:cur.kind==="lineage"?cur.subjectEn:"",oninput:e=>{if(cur.kind==="lineage")cur.subjectEn=e.target.value;}});
+      lineageWrap.appendChild(len);
       function paintKind(){
         [...kseg.children].forEach(b=>b.classList.toggle("on",b.dataset.k===cur.kind));
-        venueWrap.style.display=cur.kind==="venue"?"":"none";
         horseWrap.style.display=cur.kind==="horse"?"":"none";
-        freeWrap.style.display=cur.kind==="other"?"":"none";
+        lineageWrap.style.display=cur.kind==="lineage"?"":"none";
       }
-      [["venue","JRA開催場"],["horse","馬名"],["other","自由(海外/地方等)"]].forEach(([k,label])=>
+      [["horse","馬名"],["lineage","系統"]].forEach(([k,label])=>
         kseg.appendChild(el("button",{"data-k":k,text:label,onclick:()=>{ cur.kind=k; paintKind(); }})));
       body.appendChild(kseg);
-      body.appendChild(venueWrap); body.appendChild(horseWrap); body.appendChild(freeWrap);
-      if(cur.kind==="venue") paintVenue();
+      body.appendChild(horseWrap); body.appendChild(lineageWrap);
       paintKind();
       body.appendChild(el("label",{class:"fld",text:"タグ(任意・; 区切り)"}));
       body.appendChild(el("input",{type:"text",value:cur.tags,placeholder:"得意;左回り○;道悪巧者",oninput:e=>cur.tags=e.target.value}));
@@ -612,11 +614,12 @@
       const ta=el("textarea",{placeholder:"自由に記入(開催日に関係なく残せます)",oninput:e=>cur.memo=e.target.value}); ta.value=cur.memo; body.appendChild(ta);
       const brow=el("div",{class:"btn-row"});
       brow.appendChild(el("button",{class:"btn full",text:isEdit?"更新":"保存",onclick:()=>{
-        const subj = cur.kind==="venue"?cur.subject.trim() : (cur.kind==="horse"?hjp.value.trim() : fin.value.trim());
-        const subEn = cur.kind==="horse"?hen.value.trim():"";
-        if(!subj){ toast(cur.kind==="venue"?"開催場を選択してください":"項目名を入力してください"); return; }
+        const subj = cur.kind==="horse"?hjp.value.trim():ljp.value.trim();
+        const subEn = cur.kind==="horse"?hen.value.trim():len.value.trim();
+        if(!subj){ toast(cur.kind==="horse"?"馬名を入力してください":"系統名を入力してください"); return; }
         if(!cur.memo.trim()){ toast("メモを入力してください"); return; }
         upsertNote({id:cur.id,kind:cur.kind,subject:subj,subjectEn:subEn,
+          presumedLineage: cur.kind==="horse"?cur.presumedLineage.trim():"",
           tags:cur.tags.split(/[;；]/).map(s=>s.trim()).filter(Boolean),memo:cur.memo});
         closeSheet(); renderNotes(); toast(isEdit?"更新しました":"保存しました");
       }}));
@@ -624,7 +627,7 @@
     });
   }
   // 一般メモ CSV/JSON
-  const NOTE_COLS=["id","kind","subject","subjectEn","tags","memo","createdAt","updatedAt"];
+  const NOTE_COLS=["id","kind","subject","subjectEn","presumedLineage","tags","memo","createdAt","updatedAt"];
   function notesToCSV(notes){
     const lines=[NOTE_COLS.join(",")];
     notes.forEach(n=> lines.push(NOTE_COLS.map(c=> c==="tags"?csvSafe((n.tags||[]).join(";")):csvSafe(n[c])).join(",")));
@@ -636,8 +639,8 @@
     if(idx.subject<0) throw new Error("CSVヘッダに subject 列が必要です");
     const out=[];
     for(let r=1;r<rows.length;r++){ const row=rows[r]; const g=c=> idx[c]>=0?stripCsvGuard(row[idx[c]]||""):"";
-      const o={ id:g("id"), kind:g("kind").trim()||"other", subject:g("subject").trim(), subjectEn:g("subjectEn").trim(),
-        tags:g("tags"), memo:g("memo"), createdAt:g("createdAt")||undefined, updatedAt:g("updatedAt")||undefined };
+      const o={ id:g("id"), kind:g("kind").trim()||"horse", subject:g("subject").trim(), subjectEn:g("subjectEn").trim(),
+        presumedLineage:g("presumedLineage"), tags:g("tags"), memo:g("memo"), createdAt:g("createdAt")||undefined, updatedAt:g("updatedAt")||undefined };
       if(!o.subject && !o.memo) continue; out.push(o);
     }
     return out;
@@ -661,14 +664,12 @@
 
   // 一般メモ: 簡易テンプレ / AIプロンプト / 項目別エクスポート
   function doNotesTemplate(){
-    const header=["kind","subject","subjectEn","tags","memo"];
+    const header=["kind","subject","subjectEn","presumedLineage","tags","memo"];
     const rows=[
-      ["horse","レイデオロ","Rey de Oro","長距離;末脚",""],
-      ["horse","ウインブライト","Win Bright","福島得意",""],
-      ["venue","中山","","内枠有利","小回りで先行有利の傾向。"],
-      ["venue","東京","","差し届く","直線長く上がり勝負。"],
-      ["other","香港シャティン","","洋芝;タフ","日本馬は距離適性が重要。"],
-      ["other","大井","","地方;砂深い","脚抜き・砂質のメモ。"]
+      ["horse","レイデオロ","Rey de Oro","ロベルト系","長距離;末脚",""],
+      ["horse","ウインブライト","Win Bright","","福島得意",""],
+      ["lineage","ロベルト","Roberto","","","パワー・持久力に優れる。道悪も苦にしない。"],
+      ["lineage","サンデーサイレンス","Sunday Silence","","","万能。特に瞬発力に優れる。"]
     ];
     const csv="﻿"+[header.join(","),...rows.map(r=>r.map(csvSafe).join(","))].join("\r\n");
     downloadFile("baba_notes_template.csv", csv, "text/csv;charset=utf-8");
@@ -678,13 +679,14 @@
 "あなたは競馬メモの整理アシスタントです。私のメモを「馬場カレンダー」アプリの【一般メモ】用CSVに変換してください。",
 "",
 "【出力形式】",
-"- 1行目は必ずこのヘッダー: kind,subject,subjectEn,tags,memo",
+"- 1行目は必ずこのヘッダー: kind,subject,subjectEn,presumedLineage,tags,memo",
 "- 2行目以降にデータ。出力はCSVテキストのみ。前後の説明やコードブロック記号(```)は付けない。",
 "",
 "【各列のルール】",
-"- kind: 種類。次のいずれか → venue（JRA開催場） / horse（馬名） / other（海外・地方・自由）",
-"- subject: 項目名。kindがvenueなら競馬場名（東京,中山,阪神,京都,中京,新潟,福島,小倉,札幌,函館）、horseなら馬の日本語名、otherなら自由な名称（例 香港シャティン, 大井, 凱旋門賞）",
-"- subjectEn: 馬の英名（あれば）。無ければ空欄。大文字小文字は問わない",
+"- kind: 種類。次のいずれか → horse（馬名） / lineage（系統・血統の系統名）",
+"- subject: 項目名。kindがhorseなら馬の日本語名、lineageなら系統名の日本語（例 ロベルト, サンデーサイレンス）",
+"- subjectEn: 英名（あれば）。馬・系統どちらも任意。無ければ空欄。大文字小文字は問わない",
+"- presumedLineage: 見なし系統。kindがhorseの場合のみ使用。公式の血統が不明でも自分で仮に割り当てる系統名（任意、例 ロベルト系）。kindがlineageの場合は空欄",
 "- tags: タグ。複数はセミコロン ; 区切り。無ければ空欄",
 "- memo: メモ本文（自由記述）",
 "",
