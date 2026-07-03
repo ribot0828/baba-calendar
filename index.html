@@ -1421,6 +1421,22 @@
     };
   }
   document.addEventListener("DOMContentLoaded", init);
+  // 旧URL(github.io)で開いた人に新公式URLを案内(閉じたら再表示しない)。新URLでは表示されない。
+  document.addEventListener("DOMContentLoaded", ()=>{
+    try{
+      if(location.hostname!=="ribot0828.github.io") return;
+      if(localStorage.getItem("moveNoticeClosed")) return;
+      const bar=el("div",{style:"background:#2c2415;border-bottom:1px solid var(--accent);padding:10px 14px;font-size:13px;line-height:1.6"});
+      bar.appendChild(el("div",{},[
+        "公式URLが移転しました → ",
+        el("a",{href:"https://baba-calendar.pages.dev/",style:"color:var(--accent);font-weight:700",text:"baba-calendar.pages.dev"})
+      ]));
+      bar.appendChild(el("div",{class:"tiny muted",text:"メモは自動では移りません。「履歴」タブ→バックアップで書き出し、新URLで復元してください。"}));
+      bar.appendChild(el("button",{class:"tiny",style:"color:var(--muted);margin-top:4px",text:"閉じる(今後表示しない)",onclick:()=>{ localStorage.setItem("moveNoticeClosed","1"); bar.remove(); }}));
+      const hdr=document.querySelector(".app-header");
+      hdr.parentNode.insertBefore(bar, hdr.nextSibling);
+    }catch(e){}
+  });
   // PWA: Service Worker登録(オフライン対応・ホーム画面インストール)。file://や非対応環境では黙って無視。
   if("serviceWorker" in navigator){
     window.addEventListener("load", ()=>{ navigator.serviceWorker.register("sw.js").catch(()=>{}); });
