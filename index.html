@@ -2,13 +2,13 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <!-- セキュリティ: 外部通信を全面禁止(connect-src 'none')。データは端末内に留まり外部送信されない。
      外部リソース読み込みも禁止し、サプライチェーン汚染・トラッキングを防ぐ。 -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'; connect-src 'none'; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none';">
 <meta name="referrer" content="no-referrer">
 <!-- クリックジャッキング対策: CSPのframe-ancestorsは<meta>経由だと仕様上無効なため、JSでフレーム化を検知して離脱する -->
-<script>if(window.top!==window.self){window.top.location=window.self.location;}</script>
+<script>try{if(window.top!==window.self){window.top.location=window.self.location;}}catch(e){document.addEventListener("DOMContentLoaded",function(){document.body.style.display="none";});}</script>
 <!-- スマホ「ホーム画面に追加」対応(アプリ風表示・iOSの保存データ消去対策の一助) -->
 <meta name="theme-color" content="#0f1115">
 <meta name="mobile-web-app-capable" content="yes">
@@ -388,6 +388,13 @@
     }
     return n;
   }
+  // ファイルをUTF-8テキストとして読み、onTextに渡す(失敗はtoast)
+  function readTextFile(file, onText){
+    const r=new FileReader();
+    r.onload=()=>onText(String(r.result));
+    r.onerror=()=>toast("ファイル読込エラー");
+    r.readAsText(file,"utf-8");
+  }
   let toastTimer=null;
   function toast(msg){
     const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show");
@@ -482,7 +489,8 @@
     entriesOn(iso).forEach(e=>{ if(e.venue && !set.includes(e.venue)) set.push(e.venue); });
     jusyoOn(iso).forEach(r=>{ if(r.venue && !set.includes(r.venue)) set.push(r.venue); });
     // JRA順に並べる
-    return set.sort((a,b)=>VENUES.indexOf(a)-VENUES.indexOf(b));
+    const vi=v=>{const i=VENUES.indexOf(v);return i<0?99:i;};
+    return set.sort((a,b)=>vi(a)-vi(b)||a.localeCompare(b,"ja"));
   }
 
   // 前年同開催の比較検索
@@ -639,9 +647,7 @@
   // 一般メモ CSV/JSON
   const NOTE_COLS=["id","kind","subject","subjectEn","lineage","presumedLineage","tags","memo","createdAt","updatedAt"];
   function notesToCSV(notes){
-    const lines=[NOTE_COLS.join(",")];
-    notes.forEach(n=> lines.push(NOTE_COLS.map(c=> c==="tags"?csvSafe((n.tags||[]).join(";")):csvSafe(n[c])).join(",")));
-    return "﻿"+lines.join("\r\n");
+    return buildCSV(NOTE_COLS, notes);
   }
   function csvToNotes(text){
     const rows=parseCSV(text); if(!rows.length) return [];
@@ -660,16 +666,14 @@
   function doNotesExportJSON(){ const d={app:"baba-calendar",type:"notes",version:1,exportedAt:new Date().toISOString(),notes:state.notes};
     downloadFile(`baba_notes_${todayISO()}.json`, JSON.stringify(d,null,2),"application/json"); toast("JSONを書き出しました"); }
   function handleNotesImport(file){
-    const reader=new FileReader();
-    reader.onload=()=>{ try{
-      const text=String(reader.result); let incoming=[];
+    readTextFile(file, (text)=>{ try{
+      let incoming=[];
       if(/\.json$/i.test(file.name)||text.trim().startsWith("{")||text.trim().startsWith("[")){ const j=JSON.parse(text); incoming=Array.isArray(j)?j:(Array.isArray(j.notes)?j.notes:[]); }
       else incoming=csvToNotes(text);
       if(!incoming.length){ toast("追加できるデータがありませんでした"); return; }
       let add=0,upd=0; incoming.forEach(raw=>{ const has=raw.id&&state.notes.some(n=>n.id===raw.id); upsertNote(raw); has?upd++:add++; });
       renderNotes(); toast(`取込完了: 新規${add}件 / 更新${upd}件`);
-    }catch(err){ console.error(err); toast("読み込み失敗: "+err.message); } };
-    reader.onerror=()=>toast("ファイル読込エラー"); reader.readAsText(file,"utf-8");
+    }catch(err){ console.error(err); toast("読み込み失敗: "+err.message); } });
   }
 
   // 一般メモ: 簡易テンプレ / AIプロンプト / 項目別エクスポート
@@ -711,17 +715,9 @@
     ].join("\n");
   }
   function showNotesAIPrompt(){
-    openSheet("🤖 AIで一般メモCSVを作る", (body)=>{
-      body.appendChild(el("p",{class:"small muted",
-        text:"下のプロンプトをコピーしてChatGPTやClaude等に貼り付け、続けてあなたのメモを貼ると、そのまま取り込めるCSVを作ってくれます。"}));
-      const ta=el("textarea",{readonly:"readonly",style:"min-height:240px; font-size:12px"}); ta.value=notesAiPromptText();
-      body.appendChild(ta);
-      body.appendChild(el("button",{class:"btn full",style:"margin-top:10px",text:"📋 プロンプトをコピー",onclick:async()=>{
-        let ok=false; try{ await navigator.clipboard.writeText(ta.value); ok=true; }
-        catch(e){ try{ ta.focus(); ta.select(); ok=document.execCommand("copy"); }catch(_){ } }
-        toast(ok?"コピーしました":"テキストを選択してコピーしてください");
-      }}));
-    });
+    showPromptSheet("🤖 AIで一般メモCSVを作る",
+      "下のプロンプトをコピーしてChatGPTやClaude等に貼り付け、続けてあなたのメモを貼ると、そのまま取り込めるCSVを作ってくれます。",
+      notesAiPromptText());
   }
   function filteredNotes(){
     const k=document.getElementById("notesExpKind").value, s=document.getElementById("notesExpSubject").value;
@@ -769,9 +765,8 @@
     toast(`バックアップ: カレンダー${f.entries.length}/一般メモ${f.notes.length}件`);
   }
   function handleBackupImport(file){
-    const reader=new FileReader();
-    reader.onload=()=>{ try{
-      const j=JSON.parse(String(reader.result));
+    readTextFile(file, (text)=>{ try{
+      const j=JSON.parse(text);
       const ents=Array.isArray(j.entries)?j.entries:[]; const nts=Array.isArray(j.notes)?j.notes:[];
       if(!ents.length && !nts.length){ toast("復元できるデータがありません"); return; }
       let ea=0,eu=0,na=0,nu=0;
@@ -779,8 +774,7 @@
       nts.forEach(r=>{ const h=r.id&&state.notes.some(n=>n.id===r.id); upsertNote(r); h?nu++:na++; });
       refreshAll(); renderNotes();
       toast(`復元完了: カレンダー(新${ea}/更${eu}) 一般メモ(新${na}/更${nu})`);
-    }catch(err){ console.error(err); toast("復元失敗: "+err.message); } };
-    reader.onerror=()=>toast("ファイル読込エラー"); reader.readAsText(file,"utf-8");
+    }catch(err){ console.error(err); toast("復元失敗: "+err.message); } });
   }
 
   // ---------- CSV ----------
@@ -796,16 +790,14 @@
     if(typeof v==="string" && /^'[=+\-@\t\r]/.test(v)) return v.slice(1);
     return v;
   }
+  // 列定義から共通のCSV文字列を生成(tags列は;区切りで連結)
+  function buildCSV(cols, items){
+    const lines=[cols.join(",")];
+    items.forEach(it=> lines.push(cols.map(c=> c==="tags"?csvSafe((it.tags||[]).join(";")):csvSafe(it[c])).join(",")));
+    return "﻿"+lines.join("\r\n");
+  }
   function toCSV(entries){
-    const lines=[CSV_COLS.join(",")];
-    entries.forEach(e=>{
-      const row=CSV_COLS.map(c=>{
-        if(c==="tags") return csvSafe((e.tags||[]).join(";"));
-        return csvSafe(e[c]);
-      });
-      lines.push(row.join(","));
-    });
-    return "﻿"+lines.join("\r\n"); // BOM付きでExcel文字化け防止
+    return buildCSV(CSV_COLS, entries); // BOM付きでExcel文字化け防止
   }
   // RFC4180準拠パーサ
   function parseCSV(text){
@@ -922,6 +914,21 @@
     sheet.appendChild(head);
     buildBody(sheet);
     backdrop.appendChild(sheet); root.appendChild(backdrop);
+  }
+
+  // プロンプト表示＋コピー用の共通シート
+  function showPromptSheet(title, desc, text){
+    openSheet(title,(body)=>{
+      body.appendChild(el("p",{class:"small muted",text:desc}));
+      const ta=el("textarea",{readonly:"readonly",style:"min-height:240px; font-size:12px"});
+      ta.value=text; body.appendChild(ta);
+      body.appendChild(el("button",{class:"btn full",style:"margin-top:10px",text:"📋 プロンプトをコピー",onclick:async()=>{
+        let ok=false;
+        try{ await navigator.clipboard.writeText(ta.value); ok=true; }
+        catch(e){ try{ ta.focus(); ta.select(); ok=document.execCommand("copy"); }catch(_){ ok=false; } }
+        toast(ok?"コピーしました":"テキストを選択してコピーしてください");
+      }}));
+    });
   }
 
   // 日別概要シート
@@ -1249,20 +1256,9 @@
     ].join("\n");
   }
   function showAIPrompt(){
-    openSheet("🤖 AIでCSVを作る", (body)=>{
-      body.appendChild(el("p",{class:"small muted",
-        text:"下のプロンプトをコピーして、ChatGPTやClaudeなどに貼り付け、続けてあなたのメモを貼ると、そのまま取り込めるCSVを作ってくれます。出力されたCSVをファイル保存して「インポート」から読み込んでください。"}));
-      const ta=el("textarea",{readonly:"readonly",style:"min-height:240px; font-size:12px"});
-      ta.value=aiPromptText();
-      body.appendChild(ta);
-      const btn=el("button",{class:"btn full", style:"margin-top:10px", text:"📋 プロンプトをコピー", onclick:async()=>{
-        let ok=false;
-        try{ await navigator.clipboard.writeText(ta.value); ok=true; }
-        catch(e){ try{ ta.focus(); ta.select(); ok=document.execCommand("copy"); }catch(_){ ok=false; } }
-        toast(ok?"コピーしました":"テキストを選択してコピーしてください");
-      }});
-      body.appendChild(btn);
-    });
+    showPromptSheet("🤖 AIでCSVを作る",
+      "下のプロンプトをコピーして、ChatGPTやClaudeなどに貼り付け、続けてあなたのメモを貼ると、そのまま取り込めるCSVを作ってくれます。出力されたCSVをファイル保存して「インポート」から読み込んでください。",
+      aiPromptText());
   }
 
   // ---------- 範囲を指定してエクスポート ----------
@@ -1329,10 +1325,8 @@
     toast(`${list.length}件を書き出しました`);
   }
   function handleImportFile(file){
-    const reader=new FileReader();
-    reader.onload=()=>{
+    readTextFile(file, (text)=>{
       try{
-        const text=String(reader.result);
         let incoming=[];
         if(/\.json$/i.test(file.name) || text.trim().startsWith("{") || text.trim().startsWith("[")){
           const j=JSON.parse(text);
@@ -1349,9 +1343,7 @@
         refreshAll();
         toast(`取込完了: 新規${add}件 / 更新${upd}件`);
       }catch(err){ console.error(err); toast("読み込み失敗: "+err.message); }
-    };
-    reader.onerror=()=>toast("ファイル読込エラー");
-    reader.readAsText(file, "utf-8");
+    });
   }
 
   function updateStat(){
