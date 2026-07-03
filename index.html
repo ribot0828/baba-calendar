@@ -10,7 +10,7 @@
 <!-- クリックジャッキング対策: CSPのframe-ancestorsは<meta>経由だと仕様上無効なため、JSでフレーム化を検知して離脱する -->
 <script>try{if(window.top!==window.self){window.top.location=window.self.location;}}catch(e){document.addEventListener("DOMContentLoaded",function(){document.body.style.display="none";});}</script>
 <!-- スマホ「ホーム画面に追加」対応(アプリ風表示・iOSの保存データ消去対策の一助) -->
-<meta name="theme-color" content="#0f1115">
+<meta name="theme-color" content="#101211">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -21,10 +21,10 @@
 <title>馬場カレンダー</title>
 <style>
   :root{
-    --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a;
-    --txt:#e8eaed; --muted:#9aa3b2; --accent:#4ea1ff; --accent2:#7ee787;
+    --bg:#101211; --panel:#191c1a; --panel2:#212622; --line:#2d332e;
+    --txt:#e9ebe6; --muted:#9ba69c; --accent:#d8b25e; --accent2:#8fce9f;
     --turf:#2f9e5a; --dirt:#b6803a; --jump:#8a6bd6;
-    --danger:#ff6b6b; --warn:#ffcc66; --chip:#242a35;
+    --danger:#ff7369; --warn:#e6c069; --chip:#262b27;
     --safe-b: env(safe-area-inset-bottom, 0px);
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
@@ -35,9 +35,10 @@
   h1,h2,h3{margin:0 0 8px;}
   button{font:inherit; color:inherit; cursor:pointer; border:none; background:none;}
   .app-header{position:sticky; top:0; z-index:20; background:var(--bg);
-    padding:12px 14px 8px; border-bottom:1px solid var(--line);
+    padding:calc(10px + env(safe-area-inset-top,0px)) 14px 8px; border-bottom:1px solid var(--line);
     display:flex; align-items:center; gap:10px;}
-  .app-header .title{font-size:17px; font-weight:700;}
+  .app-header .title{font-size:17px; font-weight:700; display:flex; align-items:center; gap:8px;}
+  .app-header .title .logo{width:20px; height:20px; flex:none;}
   .app-header .sub{font-size:12px; color:var(--muted);}
   .view{padding:12px 14px;}
   .hidden{display:none !important;}
@@ -107,12 +108,12 @@
   .seg{display:flex; gap:6px; flex-wrap:wrap;}
   .seg button{flex:1 1 auto; min-width:60px; background:var(--panel2); border:1px solid var(--line);
     border-radius:10px; padding:9px; font-weight:600;}
-  .seg button.on{background:var(--accent); color:#04101f; border-color:var(--accent);}
+  .seg button.on{background:var(--accent); color:#241a05; border-color:var(--accent);}
   .seg button.turf.on{background:var(--turf); color:#eafff0; border-color:var(--turf);}
   .seg button.dirt.on{background:var(--dirt); color:#fff6e8; border-color:var(--dirt);}
   .seg button.jump.on{background:var(--jump); color:#f2ecff; border-color:var(--jump);}
   .btn{display:inline-flex; align-items:center; justify-content:center; gap:6px;
-    background:var(--accent); color:#04101f; font-weight:700; border-radius:10px; padding:11px 14px;}
+    background:var(--accent); color:#241a05; font-weight:700; border-radius:10px; padding:11px 14px;}
   .btn.ghost{background:var(--panel2); color:var(--txt); border:1px solid var(--line);}
   .btn.danger{background:transparent; color:var(--danger); border:1px solid var(--danger);}
   .btn.full{width:100%;}
@@ -125,9 +126,9 @@
   .tabbar button{flex:1; padding:9px 0 8px; display:flex; flex-direction:column; align-items:center;
     gap:2px; color:var(--muted); font-size:11px;}
   .tabbar button.on{color:var(--accent);}
-  .tabbar .ic{font-size:20px; line-height:1;}
+  .tabbar .ic{width:22px; height:22px;}
   .fab{position:fixed; right:16px; bottom:calc(74px + var(--safe-b)); z-index:25;
-    width:56px; height:56px; border-radius:50%; background:var(--accent); color:#04101f;
+    width:56px; height:56px; border-radius:50%; background:var(--accent); color:#241a05;
     font-size:30px; font-weight:400; box-shadow:0 6px 18px rgba(0,0,0,.4);
     display:flex; align-items:center; justify-content:center; max-width:720px;}
 
@@ -136,6 +137,7 @@
     align-items:flex-end; justify-content:center;}
   .sheet{background:var(--panel); width:100%; max-width:720px; max-height:92vh; overflow:auto;
     border-radius:16px 16px 0 0; padding:16px 16px calc(20px + var(--safe-b)); border-top:1px solid var(--line);}
+  .sheet::before{content:""; display:block; width:36px; height:4px; border-radius:2px; background:var(--line); margin:0 auto 10px;}
   .sheet h2{display:flex; justify-content:space-between; align-items:center;}
   .x{font-size:22px; color:var(--muted); padding:2px 8px;}
 
@@ -155,7 +157,7 @@
 <body>
 <div class="app-header">
   <div style="flex:1">
-    <div class="title">🐎 馬場カレンダー</div>
+    <div class="title"><svg class="logo" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round"><path d="M5.5 3.5v9a6.5 6.5 0 0 0 13 0v-9"/><path d="M3.5 5.5h4M16.5 5.5h4"/></svg>馬場カレンダー</div>
     <div class="sub" id="hdrSub">各開催場の馬場・血統傾向を振り返る（非公式・個人制作／JRA非公認）</div>
   </div>
 </div>
@@ -197,7 +199,7 @@
   <div id="historyList"></div>
 
   <div class="card" style="margin-top:16px; border-color:var(--warn)">
-    <h3>💾 バックアップ / 復元</h3>
+    <h3>バックアップ / 復元</h3>
     <p class="small muted">データ消失に備え、<b>カレンダーメモと一般メモをまとめて1ファイル</b>に保存できます（復元できるJSON形式）。</p>
     <label class="fld">選択日より前だけ保存（この日は含まない）</label>
     <input type="date" id="bkDate">
@@ -224,7 +226,7 @@
       <button class="btn ghost full" id="expJson">全件をJSONで保存</button>
     </div>
     <div class="divider"></div>
-    <h3 class="small" style="margin-bottom:2px">🔎 範囲を指定して保存</h3>
+    <h3 class="small" style="margin-bottom:2px">範囲を指定して保存</h3>
     <p class="small muted" style="margin-top:0">年・月・開催場・回・馬場・見出しで絞り込んだ分だけ書き出せます。</p>
     <div class="filterow" style="margin-top:8px">
       <select id="expYear"><option value="">全年</option></select>
@@ -256,9 +258,9 @@
     <input type="file" id="impFile" accept=".csv,.json,text/csv,application/json" style="margin-top:8px">
     <div class="row" style="margin-top:10px; gap:8px; flex-wrap:wrap">
       <button class="btn ghost" id="dlTemplate">CSVテンプレDL</button>
-      <button class="btn ghost" id="aiPrompt">🤖 AIでCSV作成</button>
+      <button class="btn ghost" id="aiPrompt">AIでCSV作成</button>
     </div>
-    <p class="tiny muted" style="margin-top:8px">手入力が大変なら「🤖 AIでCSV作成」でプロンプトをコピーし、ChatGPTやClaudeに自分のメモと一緒に貼ると、取り込めるCSVを作ってくれます。</p>
+    <p class="tiny muted" style="margin-top:8px">手入力が大変なら「AIでCSV作成」でプロンプトをコピーし、ChatGPTやClaudeに自分のメモと一緒に貼ると、取り込めるCSVを作ってくれます。</p>
   </div>
   <div class="card">
     <h3 class="between row" style="justify-content:space-between">現在のデータ <span class="muted small" id="statCount"></span></h3>
@@ -274,7 +276,7 @@
     </ul>
   </div>
   <div class="card" style="border-color:var(--warn)">
-    <h3>⚠️ 免責事項・非公式について</h3>
+    <h3>免責事項・非公式について</h3>
     <ul class="small muted" style="margin:6px 0 0; padding-left:18px; line-height:1.7">
       <li>本アプリは<b>個人が趣味で制作した非公式ツール</b>です。JRA（日本中央競馬会）や関連団体とは一切関係なく、公認・提携もされていません。</li>
       <li>内蔵している開催日程・重賞・ダート砂の産地割合は、JRA公式サイト等で公開されている情報をもとに<b>独自に収集・作成</b>したものです。正確性・最新性は保証しません。必ず公式情報（jra.go.jp）でご確認ください。</li>
@@ -288,7 +290,7 @@
 <section id="view-notes" class="view hidden">
   <h2 class="row between" style="justify-content:space-between">一般メモ <span class="muted small" id="notesStat"></span></h2>
   <p class="small muted" style="margin-top:0">開催日に関係なく、項目（開催場・馬名・自由）ごとにメモを残せます。馬名には系統・見なし系統も記録できます。</p>
-  <input type="text" id="noteSearch" placeholder="🔍 項目・英名・メモを検索（大小文字問わず）" style="margin-bottom:10px">
+  <input type="text" id="noteSearch" placeholder="項目・英名・メモを検索（大小文字問わず）" style="margin-bottom:10px">
   <div id="notesList"></div>
 
   <div class="card">
@@ -299,7 +301,7 @@
       <button class="btn ghost full" id="notesExpJson">全件をJSONで保存</button>
     </div>
     <div class="divider"></div>
-    <h3 class="small" style="margin-bottom:2px">🔎 項目で絞り込んで保存</h3>
+    <h3 class="small" style="margin-bottom:2px">項目で絞り込んで保存</h3>
     <p class="small muted" style="margin-top:0">種類・項目で絞り込んだ分だけ書き出せます。</p>
     <div class="filterow" style="margin-top:8px">
       <select id="notesExpKind"><option value="">全種類</option><option value="venue">開催場</option><option value="horse">馬名</option><option value="other">自由</option></select>
@@ -318,19 +320,19 @@
     <input type="file" id="notesImpFile" accept=".csv,.json,text/csv,application/json" style="margin-top:8px">
     <div class="row" style="margin-top:10px; gap:8px; flex-wrap:wrap">
       <button class="btn ghost" id="notesTemplate">CSVテンプレDL</button>
-      <button class="btn ghost" id="notesAiPrompt">🤖 AIでCSV作成</button>
+      <button class="btn ghost" id="notesAiPrompt">AIでCSV作成</button>
     </div>
-    <p class="tiny muted" style="margin-top:8px">手入力が大変なら「🤖 AIでCSV作成」でプロンプトをコピーし、ChatGPTやClaudeに自分のメモと貼ると、取り込めるCSVを作ってくれます。</p>
+    <p class="tiny muted" style="margin-top:8px">手入力が大変なら「AIでCSV作成」でプロンプトをコピーし、ChatGPTやClaudeに自分のメモと貼ると、取り込めるCSVを作ってくれます。</p>
   </div>
 </section>
 
 <button class="fab hidden" id="fab">＋</button>
 
 <nav class="tabbar">
-  <button data-tab="calendar" class="on"><span class="ic">📅</span>カレンダー</button>
-  <button data-tab="history"><span class="ic">📖</span>履歴</button>
-  <button data-tab="notes"><span class="ic">🗒️</span>一般メモ</button>
-  <button data-tab="data"><span class="ic">💾</span>データ</button>
+  <button data-tab="calendar" class="on"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>カレンダー</button>
+  <button data-tab="history"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8.5 7h11M8.5 12h11M8.5 17h11"/><circle cx="4.5" cy="7" r="1.1" fill="currentColor" stroke="none"/><circle cx="4.5" cy="12" r="1.1" fill="currentColor" stroke="none"/><circle cx="4.5" cy="17" r="1.1" fill="currentColor" stroke="none"/></svg>履歴</button>
+  <button data-tab="notes"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5H6.5A2.5 2.5 0 0 0 4 7.5v10A2.5 2.5 0 0 0 6.5 20h10a2.5 2.5 0 0 0 2.5-2.5V12"/><path d="M17.8 4.2a1.9 1.9 0 0 1 2.7 2.7L13 14.4l-3.5.6.6-3.5 7.7-7.3z"/></svg>一般メモ</button>
+  <button data-tab="data"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 19V6M8.5 6 5.5 9M8.5 6l3 3"/><path d="M15.5 5v13M15.5 18l-3-3M15.5 18l3-3"/></svg>データ</button>
 </nav>
 
 <div id="sheetRoot"></div>
@@ -715,7 +717,7 @@
     ].join("\n");
   }
   function showNotesAIPrompt(){
-    showPromptSheet("🤖 AIで一般メモCSVを作る",
+    showPromptSheet("AIで一般メモCSVを作る",
       "下のプロンプトをコピーしてChatGPTやClaude等に貼り付け、続けてあなたのメモを貼ると、そのまま取り込めるCSVを作ってくれます。",
       notesAiPromptText());
   }
@@ -922,7 +924,7 @@
       body.appendChild(el("p",{class:"small muted",text:desc}));
       const ta=el("textarea",{readonly:"readonly",style:"min-height:240px; font-size:12px"});
       ta.value=text; body.appendChild(ta);
-      body.appendChild(el("button",{class:"btn full",style:"margin-top:10px",text:"📋 プロンプトをコピー",onclick:async()=>{
+      body.appendChild(el("button",{class:"btn full",style:"margin-top:10px",text:"プロンプトをコピー",onclick:async()=>{
         let ok=false;
         try{ await navigator.clipboard.writeText(ta.value); ok=true; }
         catch(e){ try{ ta.focus(); ta.select(); ok=document.execCommand("copy"); }catch(_){ ok=false; } }
@@ -947,7 +949,7 @@
         const surfChips=el("div",{class:"row"});
         [...new Set(ve.map(e=>e.surface))].filter(Boolean).forEach(s=>
           surfChips.appendChild(el("span",{class:"surf-chip "+SURF_CLASS[s], text:s})));
-        if(ve.length) surfChips.appendChild(el("span",{class:"tiny",style:"color:var(--accent2)",text:"📝"+ve.length}));
+        if(ve.length) surfChips.appendChild(el("span",{class:"tiny",style:"color:var(--accent2)",text:"メモ"+ve.length}));
         const rd = sc || ve[0] || {};
         const kaisai = (rd.round&&rd.day)?`${rd.round}回${rd.day}日目`:"";
         const leftKids=[ el("div",{style:"font-weight:700",text:v}),
@@ -968,7 +970,7 @@
       const list=entriesOn(iso).filter(e=>e.venue===venue);
       const sc=schedFor(iso, venue);
       if(sc) body.appendChild(el("div",{class:"kaisai",style:"margin:-4px 0 10px;font-size:13px",
-        text:`📍 ${sc.round}回${venue}${sc.day}日目`}));
+        text:`${sc.round}回${venue}${sc.day}日目`}));
       const jr=jusyoFor(iso, venue);
       if(jr.length){
         const box=el("div",{style:"margin-bottom:10px"});
@@ -983,7 +985,7 @@
         const idx=hist.indexOf(so), isLatest=idx===hist.length-1;
         const period = isLatest ? `最新・${so.date}〜` : `${so.date}〜${hist[idx+1].date}の前`;
         const sbox=el("div",{class:"cmp",style:"margin:0 0 12px"});
-        sbox.appendChild(el("div",{class:"tiny muted",text:`🏖️ ダート砂の産地割合（${period}・白砂${sandWhitePct(so.comp)}%）`}));
+        sbox.appendChild(el("div",{class:"tiny muted",text:`ダート砂の産地割合（${period}・白砂${sandWhitePct(so.comp)}%）`}));
         sbox.appendChild(sandBar(so.comp));
         sbox.appendChild(sandLegend(so.comp));
         if(hist.length>1){
@@ -1010,7 +1012,7 @@
       // 前年同開催の比較
       body.appendChild(el("div",{class:"divider"}));
       body.appendChild(el("div",{class:"row between"},[
-        el("h3",{text:"🔁 前年同開催との比較"}),
+        el("h3",{text:"前年同開催との比較"}),
       ]));
       let anyCmp=false;
       (list.length?list:[{venue, date:iso, surface:"", round: sc?String(sc.round):"", day: sc?String(sc.day):""}]).forEach(base=>{
@@ -1256,7 +1258,7 @@
     ].join("\n");
   }
   function showAIPrompt(){
-    showPromptSheet("🤖 AIでCSVを作る",
+    showPromptSheet("AIでCSVを作る",
       "下のプロンプトをコピーして、ChatGPTやClaudeなどに貼り付け、続けてあなたのメモを貼ると、そのまま取り込めるCSVを作ってくれます。出力されたCSVをファイル保存して「インポート」から読み込んでください。",
       aiPromptText());
   }
