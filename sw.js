@@ -1,7 +1,7 @@
 /* 馬場カレンダー Service Worker
    オフライン対応 + ホーム画面インストール用。
    アプリ更新時は CACHE のバージョン(v1→v2...)を上げること。 */
-const CACHE = "baba-cal-v3";
+const CACHE = "baba-cal-v4";
 const ASSETS = [
   "./",
   "./index.html",
